@@ -15,7 +15,8 @@ import {
   ArrowUpRight,
   LogOut,
   HelpCircle,
-  Home
+  Home,
+  Coins
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
 import { UserProfile } from '../../types/trade';
@@ -33,6 +34,7 @@ export type NavTab =
   | 'risk'
   | 'ai-review'
   | 'reports'
+  | 'billing'
   | 'settings';
 
 interface SidebarProps {
@@ -91,6 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'risk', label: 'Risk Analysis', icon: ShieldCheck },
     { id: 'ai-review', label: 'AI Review', icon: Sparkles, badge: 'AI' },
     { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'billing', label: 'Billing & USDT', icon: Coins },
     { id: 'settings', label: 'Settings', icon: Settings },
   ] as const;
 

@@ -17,6 +17,7 @@ import { PsychologyView } from './components/psychology/PsychologyView';
 import { AiAnalysisView } from './components/ai/AiAnalysisView';
 import { ImportView } from './components/import/ImportView';
 import { ReportsView } from './components/reports/ReportsView';
+import { BillingView } from './components/billing/BillingView';
 import { SettingsView } from './components/settings/SettingsView';
 import { storageService } from './lib/storage';
 import { Trade, Strategy, UserProfile } from './types/trade';
@@ -143,7 +144,7 @@ export default function App() {
         userProfile={userProfile}
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
-        onOpenUpgrade={() => setCurrentTab('subscription')}
+        onOpenUpgrade={() => setCurrentTab('billing')}
         onNavigateHome={() => setShowLanding(true)}
       />
 
@@ -165,7 +166,7 @@ export default function App() {
           onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onOpenAddTrade={() => setIsAddTradeOpen(true)}
           onOpenImport={() => setCurrentTab('import')}
-          onOpenUpgrade={() => setCurrentTab('subscription')}
+          onOpenUpgrade={() => setCurrentTab('billing')}
           onShowLanding={() => setShowLanding(true)}
         />
 
@@ -239,6 +240,13 @@ export default function App() {
 
             {currentTab === 'reports' && (
               <ReportsView trades={trades} userProfile={userProfile} />
+            )}
+
+            {currentTab === 'billing' && (
+              <BillingView
+                userProfile={userProfile}
+                onUpdateProfile={handleUpdateProfile}
+              />
             )}
 
             {(currentTab === 'settings' || currentTab === 'subscription') && (

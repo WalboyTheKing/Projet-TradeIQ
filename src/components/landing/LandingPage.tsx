@@ -283,9 +283,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
                 <h3 className="text-lg font-bold text-slate-100">Pro</h3>
                 <p className="text-xs text-slate-400 mt-1">For active traders refining their edge.</p>
                 <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold font-mono text-emerald-400">$29</span>
-                  <span className="text-xs text-slate-400">/month</span>
+                  <span className="text-3xl font-extrabold font-mono text-emerald-400">$4</span>
+                  <span className="text-xs text-slate-400">/month ($40/yr)</span>
                 </div>
+                <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Payable with USDT (BSC)</p>
                 <ul className="mt-6 space-y-2.5 text-xs text-slate-200">
                   {APP_CONFIG.plans.pro.features.map((feat, idx) => (
                     <li key={idx} className="flex items-center gap-2">
@@ -299,7 +300,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
                 onClick={onStartFree}
                 className="mt-8 w-full py-2.5 text-xs font-bold rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md transition-colors"
               >
-                Start Free Pro Trial
+                Get Started with Pro
               </button>
             </div>
 
@@ -309,9 +310,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
                 <h3 className="text-lg font-bold text-slate-100">Premium</h3>
                 <p className="text-xs text-slate-400 mt-1">For prop firm traders & professional desks.</p>
                 <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold font-mono text-slate-100">$79</span>
-                  <span className="text-xs text-slate-400">/month</span>
+                  <span className="text-3xl font-extrabold font-mono text-slate-100">$9</span>
+                  <span className="text-xs text-slate-400">/month ($90/yr)</span>
                 </div>
+                <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Payable with USDT (BSC)</p>
                 <ul className="mt-6 space-y-2.5 text-xs text-slate-300">
                   {APP_CONFIG.plans.premium.features.map((feat, idx) => (
                     <li key={idx} className="flex items-center gap-2">

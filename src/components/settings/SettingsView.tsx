@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types/trade';
 import { APP_CONFIG } from '../../config/appConfig';
+import { PRICING_PLANS, SubscriptionPlan } from '../../lib/payments/pricing';
+import { CryptoCheckoutModal } from '../billing/CryptoCheckoutModal';
 
 interface SettingsViewProps {
   userProfile: UserProfile;
@@ -30,6 +32,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleDemo,
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'plans' | 'system'>('plans');
+  const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPlan | null>(null);
 
   // Form states
   const [name, setName] = useState(userProfile.name);
@@ -54,51 +57,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
+  const currentPlanId: SubscriptionPlan =
+    userProfile.plan === 'premium'
+      ? 'premium'
+      : userProfile.plan === 'pro' || userProfile.subscriptionTier === 'PRO'
+      ? 'pro'
+      : 'free';
+
   const plans = [
     {
-      id: 'starter',
-      name: 'Starter Tier',
+      id: 'free' as SubscriptionPlan,
+      name: 'Free Tier',
       priceMonthly: '$0',
       priceYearly: '$0',
       description: 'Foundational analytical tooling for exploring traders',
       features: [
         'Up to 50 active trade logs',
         'Core performance KPI cards',
-        '1 registered Strategy Model',
+        '3 AI Chart Analyses / month',
         'Basic calendar overview',
       ],
-      current: userProfile.subscriptionTier === 'STARTER',
+      current: currentPlanId === 'free',
     },
     {
-      id: 'pro',
-      name: 'Pro Trader',
-      priceMonthly: '$29 / mo',
-      priceYearly: '$290 / yr (Save 17%)',
-      description: 'Unlimited execution tracking & advanced quantitative breakdowns',
+      id: 'pro' as SubscriptionPlan,
+      name: 'Pro Tier',
+      priceMonthly: '$4 / mo',
+      priceYearly: '$40 / yr (Save 17%)',
+      description: 'Advanced quantitative metrics, risk modeling & multimodal AI',
       features: [
         'Unlimited trade journaling',
-        'Universal CSV import (MT4/5, TV, Binance)',
-        'Comprehensive Statistics engine & R distributions',
-        'Unlimited Strategy setups & Asset breakdowns',
-        'Executive PDF/CSV exports',
+        '30 AI Chart Analyses / month',
+        'Advanced Risk & Drawdown Engine',
+        'Weekly AI Trade Reviews',
+        'Universal CSV import',
       ],
-      current: userProfile.subscriptionTier === 'PRO',
+      current: currentPlanId === 'pro',
       popular: true,
     },
     {
-      id: 'elite',
-      name: 'Elite Institutional',
-      priceMonthly: '$59 / mo',
-      priceYearly: '$590 / yr (Save 17%)',
-      description: 'Institutional AI coaching, automated audits & behavioral leak sensors',
+      id: 'premium' as SubscriptionPlan,
+      name: 'Premium Tier',
+      priceMonthly: '$9 / mo',
+      priceYearly: '$90 / yr (Save 17%)',
+      description: 'Maximum AI capacity, deep behavioral audits & priority processing',
       features: [
-        'All Pro Trader capabilities',
-        'Unlimited Gemini AI Trade Audits',
-        'Weekly behavioral leak detection reports',
-        'Live discipline violation lockouts',
-        'Priority quantitative support',
+        'All Pro Tier capabilities',
+        '100 AI Chart Analyses / month',
+        'Priority Gemini Multimodal processing',
+        'Deep discipline & behavioral leak sensors',
+        'VIP quantitative support channel',
       ],
-      current: userProfile.subscriptionTier === 'ELITE',
+      current: currentPlanId === 'premium',
     },
   ];
 
@@ -188,9 +198,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="pt-6">
                   <button
                     onClick={() => {
-                      onUpdateProfile({
-                        subscriptionTier: p.id.toUpperCase() as any,
-                      });
+                      if (p.id === 'free') {
+                        onUpdateProfile({
+                          plan: 'free',
+                          subscriptionTier: 'STARTER',
+                        });
+                      } else {
+                        setCheckoutPlan(p.id);
+                      }
                     }}
                     className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all ${
                       p.current
@@ -200,7 +215,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         : 'bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200'
                     }`}
                   >
-                    {p.current ? 'Current Plan' : `Upgrade to ${p.name}`}
+                    {p.current ? 'Current Plan' : `Upgrade via USDT (BSC)`}
                   </button>
                 </div>
               </div>
@@ -349,6 +364,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {checkoutPlan && (
+        <CryptoCheckoutModal
+          isOpen={!!checkoutPlan}
+          onClose={() => setCheckoutPlan(null)}
+          plan={checkoutPlan}
+          billingInterval="monthly"
+          onPaymentSuccess={(newPlan) => {
+            onUpdateProfile({
+              plan: newPlan,
+              subscriptionTier: newPlan === 'premium' ? 'ELITE' : 'PRO',
+            });
+            setCheckoutPlan(null);
+          }}
+        />
       )}
     </div>
   );

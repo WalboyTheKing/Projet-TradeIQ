@@ -58,6 +58,102 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// CRYPTO BILLING ENDPOINTS (USDT on BNB Smart Chain / BSC)
+// ============================================================================
+
+// 1. Create Crypto Checkout Session
+app.post('/api/checkout/crypto', async (req: Request, res: Response) => {
+  try {
+    const { plan, billingInterval, network, userId } = req.body;
+    if (!plan || !billingInterval) {
+      return res.status(400).json({ error: 'Missing required parameters: plan and billingInterval' });
+    }
+
+    const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
+      return await import('./src/lib/payments/cryptoProvider');
+    });
+
+    const session = await cryptoPaymentService.createPayment({
+      plan,
+      billingInterval,
+      network: network || 'BSC',
+      userId: userId || 'usr_default',
+    });
+
+    return res.status(200).json({ success: true, session });
+  } catch (err: any) {
+    console.error('Error creating crypto checkout:', err);
+    return res.status(400).json({ error: err?.message || 'Failed to create crypto checkout session' });
+  }
+});
+
+// 2. Query Crypto Payment Status
+app.get('/api/payments/status/:paymentId', async (req: Request, res: Response) => {
+  try {
+    const { paymentId } = req.params;
+    if (!paymentId) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+
+    const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
+      return await import('./src/lib/payments/cryptoProvider');
+    });
+
+    const session = await cryptoPaymentService.getPayment(paymentId);
+    if (!session) {
+      return res.status(404).json({ error: 'Payment session not found or expired' });
+    }
+
+    return res.status(200).json({ success: true, session });
+  } catch (err: any) {
+    console.error('Error retrieving payment status:', err);
+    return res.status(500).json({ error: 'Internal server error checking payment status' });
+  }
+});
+
+// 3. Crypto Payment Webhook (HMAC Signature & Idempotency)
+app.post('/api/webhooks/crypto', async (req: Request, res: Response) => {
+  try {
+    const signature = (req.headers['x-signature'] || req.headers['x-nowpayments-sig']) as string | undefined;
+    const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
+      return await import('./src/lib/payments/cryptoProvider');
+    });
+
+    const verified = cryptoPaymentService.verifyWebhook(req.body, signature);
+    if (!verified.isValid) {
+      console.warn('Crypto webhook verification failed:', verified.error);
+      return res.status(400).json({ error: verified.error });
+    }
+
+    const processResult = await cryptoPaymentService.processWebhookEvent(verified);
+    return res.status(200).json({ success: true, result: processResult });
+  } catch (err: any) {
+    console.error('Error processing crypto webhook:', err);
+    return res.status(500).json({ error: 'Webhook processing failure' });
+  }
+});
+
+// 4. Sandbox Payment Confirmation (Test simulation)
+app.post('/api/checkout/crypto/sandbox-confirm', async (req: Request, res: Response) => {
+  try {
+    const { paymentId, txHash } = req.body;
+    if (!paymentId) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+
+    const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
+      return await import('./src/lib/payments/cryptoProvider');
+    });
+
+    const session = await cryptoPaymentService.sandboxConfirmPayment(paymentId, txHash);
+    return res.status(200).json({ success: true, session });
+  } catch (err: any) {
+    console.error('Error in sandbox payment confirmation:', err);
+    return res.status(400).json({ error: err?.message || 'Failed to confirm test payment' });
+  }
+});
+
 // Run Analytics Unit Tests endpoint
 app.get('/api/tests/run', async (req: Request, res: Response) => {
   try {
