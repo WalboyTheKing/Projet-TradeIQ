@@ -34,6 +34,8 @@ export interface TradeScenario {
   riskReward: string; // e.g. "1:2.5" or "N/A (unreadable)"
   invalidation: string;
   confidence: number; // 0 - 100
+  confidenceLevel?: 'High' | 'Medium' | 'Low';
+  qualitativeNotice?: string;
   reasoning: string;
 }
 
@@ -81,10 +83,12 @@ export interface ChartAnalysisResult {
   structure: {
     bias: MarketBias;
     confidence: number; // 0 - 100
+    confidenceLevel?: 'High' | 'Medium' | 'Low';
     summary: string;
     higherHighsLows: 'HH_HL' | 'LH_LL' | 'Mixed' | 'Not visible';
     structureEvents: string[]; // e.g. ["Break of Structure (BOS)", "Consolidation Range", "Liquidity Sweep"]
     explanation: string;
+    qualitativeDisclaimer?: string;
   };
 
   // C. Key Levels

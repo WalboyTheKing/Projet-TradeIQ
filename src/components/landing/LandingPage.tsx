@@ -21,9 +21,10 @@ import { APP_CONFIG } from '../../config/appConfig';
 interface LandingPageProps {
   onStartFree: () => void;
   onViewDemo: () => void;
+  onLogin?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDemo }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDemo, onLogin }) => {
   const features = [
     {
       title: 'Trade Journal',
@@ -103,15 +104,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
           </div>
 
           <div className="flex items-center gap-3">
+            {onLogin && (
+              <button
+                onClick={onLogin}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+              >
+                Connexion
+              </button>
+            )}
             <button
               onClick={onViewDemo}
-              className="px-3.5 py-1.5 text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors"
+              className="px-3.5 py-1.5 text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors cursor-pointer"
             >
               View Demo
             </button>
             <button
               onClick={onStartFree}
-              className="px-4 py-1.5 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg shadow-[0_0_20px_rgba(52,211,153,0.3)] transition-all"
+              className="px-4 py-1.5 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg shadow-[0_0_20px_rgba(52,211,153,0.3)] transition-all cursor-pointer"
             >
               Start Free
             </button>

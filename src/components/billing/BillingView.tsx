@@ -32,13 +32,47 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [activeSubData, setActiveSubData] = useState<{
+    plan: SubscriptionPlan;
+    status: string;
+    currentPeriodEnd: string | null;
+    daysRemaining: number | null;
+  } | null>(null);
+
+  // Sync with persistent Supabase subscription endpoint
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchSub = async () => {
+      try {
+        const res = await fetch('/api/user/subscription');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success && data.subscription) {
+          setActiveSubData(data.subscription);
+          if (data.subscription.plan && data.subscription.plan !== userProfile.plan) {
+            onUpdateProfile({
+              plan: data.subscription.plan,
+              subscriptionTier: data.subscription.plan === 'premium' ? 'ELITE' : data.subscription.plan === 'pro' ? 'PRO' : 'STARTER',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not sync subscription:', e);
+      }
+    };
+    fetchSub();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const currentPlanId: SubscriptionPlan =
-    userProfile.plan === 'premium'
+    activeSubData?.plan ||
+    (userProfile.plan === 'premium'
       ? 'premium'
       : userProfile.plan === 'pro' || userProfile.subscriptionTier === 'PRO'
       ? 'pro'
-      : 'free';
+      : 'free');
 
   const currentPlan = PRICING_PLANS[currentPlanId];
 
@@ -56,6 +90,12 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
       plan: newPlan,
       subscriptionTier: newPlan === 'premium' ? 'ELITE' : 'PRO',
     });
+    setActiveSubData((prev) => ({
+      plan: newPlan,
+      status: 'active',
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      daysRemaining: 30,
+    }));
     setIsCheckoutOpen(false);
     setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 5000);
@@ -105,6 +145,14 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
                 Active
               </span>
             </p>
+            {activeSubData?.currentPeriodEnd && activeSubData.daysRemaining !== null && (
+              <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-emerald-400" />
+                {activeSubData.daysRemaining > 0
+                  ? `${activeSubData.daysRemaining} days remaining (renews/expires ${new Date(activeSubData.currentPeriodEnd).toLocaleDateString()})`
+                  : 'Subscription Expired'}
+              </p>
+            )}
           </div>
           <div className="h-9 w-px bg-slate-800" />
           <div>

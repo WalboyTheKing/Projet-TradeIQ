@@ -48,9 +48,9 @@ export const MarketStructure: React.FC<MarketStructureProps> = ({ structure }) =
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-400">Confidence:</span>
-          <span className="font-mono text-xs font-semibold text-slate-200">
-            {structure.confidence}%
+          <span className="text-[11px] text-slate-400">Visual Confidence:</span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
+            {structure.confidenceLevel || (structure.confidence >= 75 ? 'High' : structure.confidence >= 55 ? 'Medium' : 'Low')} ({structure.confidence}%)
           </span>
         </div>
       </div>

@@ -92,8 +92,8 @@ export const TradeScenarios: React.FC<TradeScenariosProps> = ({ scenarios }) => 
                   </span>
                   <div className="flex items-center gap-2">
                     {getDirectionBadge(scenario.direction)}
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {scenario.confidence}%
+                    <span className="text-[10px] font-medium text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60" title="Qualitative structure clarity — not a win probability">
+                      Confidence: <span className="text-emerald-400 font-bold">{scenario.confidenceLevel || (scenario.confidence >= 75 ? 'High' : scenario.confidence >= 55 ? 'Medium' : 'Low')}</span>
                     </span>
                   </div>
                 </div>
@@ -158,6 +158,14 @@ export const TradeScenarios: React.FC<TradeScenariosProps> = ({ scenarios }) => 
             </div>
           );
         })}
+      </div>
+
+      {/* Qualitative Disclaimer Note */}
+      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 text-[11px] text-slate-400 flex items-center gap-2">
+        <HelpCircle className="w-4 h-4 text-emerald-400/80 shrink-0" />
+        <span>
+          <strong className="text-slate-200">Qualitative Assessment Notice:</strong> Confidence ratings (High / Medium / Low) reflect structural and visual pattern clarity derived from your screenshot. They do not represent statistical win probabilities or financial guarantees.
+        </span>
       </div>
     </div>
   );

@@ -44,6 +44,7 @@ interface SidebarProps {
   userProfile?: UserProfile | null;
   onOpenUpgrade?: () => void;
   onNavigateHome?: () => void;
+  onSignOut?: () => void;
   isMobileOpen?: boolean;
   isOpen?: boolean;
   onCloseMobile?: () => void;
@@ -57,6 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userProfile,
   onOpenUpgrade,
   onNavigateHome,
+  onSignOut,
   isMobileOpen = false,
   isOpen = false,
   onCloseMobile,
@@ -233,15 +235,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
 
-            {onNavigateHome && (
+            {onSignOut ? (
+              <button
+                onClick={onSignOut}
+                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800/60 rounded-md transition-colors cursor-pointer"
+                title="Se déconnecter"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            ) : onNavigateHome ? (
               <button
                 onClick={onNavigateHome}
-                className="p-1 text-slate-400 hover:text-red-400 hover:bg-slate-800/60 rounded-md transition-colors"
+                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800/60 rounded-md transition-colors cursor-pointer"
                 title="Return to Public Site"
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </aside>

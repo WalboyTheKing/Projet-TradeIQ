@@ -226,96 +226,126 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* TAB 2: Trader Profile & Risk Limits */}
       {activeTab === 'profile' && (
-        <div className="rounded-xl border border-slate-800 bg-[#0F172A]/70 p-6 max-w-2xl">
-          <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-            {savedSuccess && (
-              <div className="p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-medium">
-                Profile parameters updated successfully!
-              </div>
-            )}
+        <div className="space-y-6 max-w-2xl">
+          {/* Read-Only Account Identity Card */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F172A]/70 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <User className="w-4 h-4 text-emerald-400" />
+              <span>Informations du compte TRADEIQ</span>
+            </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-slate-300 mb-1 font-semibold">Trader Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 font-semibold">Account Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-emerald-500"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
+                  Email de connexion
+                </span>
+                <span className="text-slate-200 font-medium truncate block">
+                  {userProfile.email}
+                </span>
               </div>
 
-              <div>
-                <label className="block text-slate-300 mb-1 font-semibold">
-                  Initial Capital Base
-                </label>
-                <input
-                  type="number"
-                  value={capital}
-                  onChange={(e) => setCapital(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
-                />
+              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
+                  Plan Actif
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  {userProfile.plan || 'FREE'}
+                </span>
               </div>
 
-              <div>
-                <label className="block text-slate-300 mb-1 font-semibold">Base Currency</label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-emerald-500"
+              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
+                  Sécurité du plan
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Géré côté serveur (NOWPayments)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Editable Parameters Form */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F172A]/70 p-6">
+            <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
+              {savedSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-medium">
+                  Paramètres de profil mis à jour avec succès !
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Nom d'affichage</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Devise de base</label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                    <option value="CHF">CHF (₣)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">
+                    Capital de départ
+                  </label>
+                  <input
+                    type="number"
+                    value={capital}
+                    onChange={(e) => setCapital(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">
+                    Objectif net mensuel ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={monthlyGoal}
+                    onChange={(e) => setMonthlyGoal(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">
+                    Risque max par trade (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={maxRisk}
+                    onChange={(e) => setMaxRisk(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 font-bold text-slate-950 text-xs shadow-sm transition-all cursor-pointer"
                 >
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
-                  <option value="CHF">CHF (₣)</option>
-                </select>
+                  Enregistrer les préférences
+                </button>
               </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 font-semibold">
-                  Monthly Net Profit Goal ($)
-                </label>
-                <input
-                  type="number"
-                  value={monthlyGoal}
-                  onChange={(e) => setMonthlyGoal(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 font-semibold">
-                  Max Risk Per Trade (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={maxRisk}
-                  onChange={(e) => setMaxRisk(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-            </div>
-
-            <div className="pt-3 flex justify-end">
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 font-bold text-slate-950 text-xs shadow-sm transition-all"
-              >
-                Save Preferences
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       )}
 

@@ -188,8 +188,9 @@ Rules:
 2. Generate up to 3 scenarios: Primary Scenario, Alternative Scenario, and Invalidation Scenario.
 3. Keep the analysis quality score honest reflecting clarity of resolution and indicator visibility.`;
 
+      const aiModel = process.env.AI_MODEL || 'gemini-2.5-flash';
       const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: aiModel,
         contents: [
           {
             inlineData: {
@@ -228,10 +229,12 @@ Rules:
             structure: {
               bias: ['bullish', 'bearish', 'ranging', 'unclear'].includes(parsed.structure?.bias) ? parsed.structure.bias : 'unclear',
               confidence: typeof parsed.structure?.confidence === 'number' ? parsed.structure.confidence : 70,
+              confidenceLevel: (typeof parsed.structure?.confidence === 'number' && parsed.structure.confidence >= 75) ? 'High' : (parsed.structure?.confidence >= 55 ? 'Medium' : 'Low'),
               summary: parsed.structure?.summary || 'Market structure derived from visible swing highs and lows.',
               higherHighsLows: parsed.structure?.higherHighsLows || 'Mixed',
               structureEvents: Array.isArray(parsed.structure?.structureEvents) ? parsed.structure.structureEvents : ['Swing range observation'],
               explanation: parsed.structure?.explanation || 'Structure assessed strictly based on observable swing points in screenshot.',
+              qualitativeDisclaimer: 'Qualitative AI visual assessment based on observable chart patterns — not a mathematical probability or profit guarantee.',
             },
             levels: Array.isArray(parsed.levels)
               ? parsed.levels.map((lvl: any, idx: number) => ({
@@ -246,22 +249,28 @@ Rules:
                 }))
               : [],
             scenarios: Array.isArray(parsed.scenarios)
-              ? parsed.scenarios.map((sc: any, idx: number) => ({
-                  id: sc.id || `sc_${idx + 1}`,
-                  type: sc.type || (idx === 0 ? 'primary' : idx === 1 ? 'alternative' : 'invalidation'),
-                  name: sc.name || `Scenario ${idx + 1}`,
-                  direction: sc.direction || 'NEUTRAL',
-                  entry: typeof sc.entry === 'number' ? sc.entry : null,
-                  entryDisplay: sc.entryDisplay || (typeof sc.entry === 'number' ? String(sc.entry) : 'Exact price unavailable from screenshot'),
-                  stopLoss: typeof sc.stopLoss === 'number' ? sc.stopLoss : null,
-                  stopLossDisplay: sc.stopLossDisplay || (typeof sc.stopLoss === 'number' ? String(sc.stopLoss) : 'Exact price unavailable from screenshot'),
-                  takeProfit: typeof sc.takeProfit === 'number' ? sc.takeProfit : null,
-                  takeProfitDisplay: sc.takeProfitDisplay || (typeof sc.takeProfit === 'number' ? String(sc.takeProfit) : 'Exact price unavailable from screenshot'),
-                  riskReward: sc.riskReward || '1:2.0 (Estimated)',
-                  invalidation: sc.invalidation || 'Break past structural swing invalidates setup.',
-                  confidence: typeof sc.confidence === 'number' ? sc.confidence : 70,
-                  reasoning: sc.reasoning || 'Technical progression following visible market structure.',
-                }))
+              ? parsed.scenarios.map((sc: any, idx: number) => {
+                  const confVal = typeof sc.confidence === 'number' ? sc.confidence : 70;
+                  const confLevel: 'High' | 'Medium' | 'Low' = confVal >= 75 ? 'High' : confVal >= 55 ? 'Medium' : 'Low';
+                  return {
+                    id: sc.id || `sc_${idx + 1}`,
+                    type: sc.type || (idx === 0 ? 'primary' : idx === 1 ? 'alternative' : 'invalidation'),
+                    name: sc.name || `Scenario ${idx + 1}`,
+                    direction: sc.direction || 'NEUTRAL',
+                    entry: typeof sc.entry === 'number' ? sc.entry : null,
+                    entryDisplay: sc.entryDisplay || (typeof sc.entry === 'number' ? String(sc.entry) : 'Exact price unavailable from screenshot'),
+                    stopLoss: typeof sc.stopLoss === 'number' ? sc.stopLoss : null,
+                    stopLossDisplay: sc.stopLossDisplay || (typeof sc.stopLoss === 'number' ? String(sc.stopLoss) : 'Exact price unavailable from screenshot'),
+                    takeProfit: typeof sc.takeProfit === 'number' ? sc.takeProfit : null,
+                    takeProfitDisplay: sc.takeProfitDisplay || (typeof sc.takeProfit === 'number' ? String(sc.takeProfit) : 'Exact price unavailable from screenshot'),
+                    riskReward: sc.riskReward || '1:2.0 (Estimated)',
+                    invalidation: sc.invalidation || 'Break past structural swing invalidates setup.',
+                    confidence: confVal,
+                    confidenceLevel: confLevel,
+                    qualitativeNotice: `Confidence: ${confLevel} (Qualitative structure clarity — not a statistical win probability)`,
+                    reasoning: sc.reasoning || 'Technical progression following visible market structure.',
+                  };
+                })
               : [],
             risk: riskCalc,
             reasoning: {
@@ -319,6 +328,7 @@ Rules:
     structure: {
       bias,
       confidence: 76,
+      confidenceLevel: 'High',
       summary: `Observable price sequence indicates a ${bias} structural tendency with distinct compression around key technical zones.`,
       higherHighsLows: isLong ? 'HH_HL' : isShort ? 'LH_LL' : 'Mixed',
       structureEvents: [
@@ -327,6 +337,7 @@ Rules:
         'Reaction at liquidity pocket',
       ],
       explanation: 'Analysis formulated strictly on observable geometric swing progression within the uploaded viewport.',
+      qualitativeDisclaimer: 'Qualitative visual assessment based on observable chart structure — not a statistical win probability or financial guarantee.',
     },
     levels: [
       {

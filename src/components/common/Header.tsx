@@ -8,7 +8,8 @@ import {
   User, 
   Menu,
   ShieldAlert,
-  Flame
+  Flame,
+  LogOut
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
 import { UserProfile } from '../../types/trade';
@@ -22,6 +23,7 @@ interface HeaderProps {
   onOpenImport?: () => void;
   onOpenUpgrade?: () => void;
   onShowLanding?: () => void;
+  onSignOut?: () => void;
   userProfile?: UserProfile | null;
   onToggleMobileMenu?: () => void;
   onToggleMobileSidebar?: () => void;
@@ -36,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenImport,
   onOpenUpgrade,
   onShowLanding,
+  onSignOut,
   userProfile,
   onToggleMobileMenu,
   onToggleMobileSidebar,
@@ -162,11 +165,20 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div className="hidden lg:flex items-center gap-2 pl-2 border-l border-slate-800 text-xs">
+        <div className="hidden lg:flex items-center gap-2.5 pl-2 border-l border-slate-800 text-xs">
           <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-semibold text-xs">
             {profile.name?.charAt(0) || 'U'}
           </div>
           <span className="text-slate-300 font-medium">{profile.name}</span>
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 rounded-lg transition-colors cursor-pointer ml-1"
+              title="Se déconnecter"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </header>

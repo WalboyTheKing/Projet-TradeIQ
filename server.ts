@@ -16,9 +16,9 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Lazy initialize Gemini client
+// Lazy initialize Gemini client (supports AI_API_KEY / GEMINI_API_KEY & configurable AI_MODEL)
 function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
   return new GoogleGenAI({
     apiKey,
@@ -36,12 +36,51 @@ function getGeminiClient(): GoogleGenAI | null {
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', product: 'TRADEIQ', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    product: 'TRADEIQ',
+    aiProvider: process.env.AI_PROVIDER || 'gemini',
+    aiModel: process.env.AI_MODEL || 'gemini-2.5-flash',
+    timestamp: new Date().toISOString()
+  });
 });
 
-// AI Multimodal Chart Analysis Endpoint
+// User Subscription & Expiration Status (Supabase backed)
+app.get('/api/user/subscription', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.query.userId as string) || (req.headers['x-user-id'] as string) || 'usr_default';
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+
+    const subscription = await dbService.getEffectiveSubscription(userId);
+    return res.status(200).json({ success: true, subscription });
+  } catch (err: any) {
+    console.error('Error fetching subscription:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to fetch subscription status' });
+  }
+});
+
+// AI Multimodal Chart Analysis Endpoint (Strict Server-Side Quota Enforced)
 app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
   try {
+    const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
+
+    // 1. Check & increment monthly AI quota from Supabase / DB
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+
+    const quota = await dbService.checkAndIncrementAiQuota(userId, 'chart_analysis');
+    if (!quota.allowed) {
+      return res.status(403).json({
+        error: quota.error,
+        plan: quota.plan,
+        currentCount: quota.currentCount,
+        limit: quota.limit,
+      });
+    }
+
     const aiClient = getGeminiClient();
     const { processChartAnalysis } = await import('./src/server/chartAnalysisHandler.js').catch(async () => {
       return await import('./src/server/chartAnalysisHandler');
@@ -51,7 +90,14 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
     if (!result.success) {
       return res.status(result.status || 400).json({ error: result.error });
     }
-    return res.status(result.status || 200).json(result.data);
+    return res.status(result.status || 200).json({
+      ...result.data,
+      quotaUsage: {
+        currentCount: quota.currentCount,
+        limit: quota.limit,
+        plan: quota.plan,
+      },
+    });
   } catch (err: any) {
     console.error('Server error in /api/ai/chart-analysis:', err);
     return res.status(500).json({ error: err?.message || 'Internal server error processing chart analysis' });
@@ -59,10 +105,10 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
 });
 
 // ============================================================================
-// CRYPTO BILLING ENDPOINTS (USDT on BNB Smart Chain / BSC)
+// CRYPTO BILLING ENDPOINTS (USDT on BNB Smart Chain / BSC via NOWPayments)
 // ============================================================================
 
-// 1. Create Crypto Checkout Session
+// 1. Create Crypto Checkout Session (NowPayments + Supabase persistence)
 app.post('/api/checkout/crypto', async (req: Request, res: Response) => {
   try {
     const { plan, billingInterval, network, userId } = req.body;
@@ -74,12 +120,15 @@ app.post('/api/checkout/crypto', async (req: Request, res: Response) => {
       return await import('./src/lib/payments/cryptoProvider');
     });
 
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const appUrl = process.env.APP_URL || `${protocol}://${req.get('host')}`;
+
     const session = await cryptoPaymentService.createPayment({
       plan,
       billingInterval,
       network: network || 'BSC',
       userId: userId || 'usr_default',
-    });
+    }, userId || 'usr_default', appUrl);
 
     return res.status(200).json({ success: true, session });
   } catch (err: any) {
@@ -112,10 +161,10 @@ app.get('/api/payments/status/:paymentId', async (req: Request, res: Response) =
   }
 });
 
-// 3. Crypto Payment Webhook (HMAC Signature & Idempotency)
-app.post('/api/webhooks/crypto', async (req: Request, res: Response) => {
+// 3. Crypto Payment Webhooks (NOWPayments IPN HMAC SHA-512 & Idempotency)
+const handleWebhook = async (req: Request, res: Response) => {
   try {
-    const signature = (req.headers['x-signature'] || req.headers['x-nowpayments-sig']) as string | undefined;
+    const signature = (req.headers['x-nowpayments-sig'] || req.headers['x-signature']) as string | undefined;
     const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
       return await import('./src/lib/payments/cryptoProvider');
     });
@@ -132,7 +181,10 @@ app.post('/api/webhooks/crypto', async (req: Request, res: Response) => {
     console.error('Error processing crypto webhook:', err);
     return res.status(500).json({ error: 'Webhook processing failure' });
   }
-});
+};
+
+app.post('/api/webhooks/crypto', handleWebhook);
+app.post('/api/payments/nowpayments/ipn', handleWebhook);
 
 // 4. Sandbox Payment Confirmation (Test simulation)
 app.post('/api/checkout/crypto/sandbox-confirm', async (req: Request, res: Response) => {
@@ -206,8 +258,9 @@ Provide an objective review structured in valid JSON only with keys:
 
 Do NOT promise future profit. Return purely JSON without markdown backticks.`;
 
+      const aiModel = process.env.AI_MODEL || 'gemini-2.5-flash';
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: aiModel,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -302,8 +355,9 @@ Generate a structured weekly review in valid JSON format:
 }
 Do NOT promise future returns. Never output markdown ticks. Return purely valid JSON.`;
 
+      const aiModel = process.env.AI_MODEL || 'gemini-2.5-flash';
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: aiModel,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',

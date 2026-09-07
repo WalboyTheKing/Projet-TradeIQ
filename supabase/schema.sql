@@ -1,7 +1,7 @@
 -- ============================================================================
 -- TRADEIQ DATABASE SCHEMA & ROW LEVEL SECURITY (RLS) POLICIES
--- Target: Supabase PostgreSQL
--- Payment Model: Crypto-Only (USDT on BNB Smart Chain / BSC)
+-- Target: Supabase PostgreSQL (Production-Grade)
+-- Payment Model: Crypto-Only (USDT on BNB Smart Chain / BSC via NOWPayments)
 -- ============================================================================
 
 -- 1. Idempotent Custom ENUMs
@@ -30,6 +30,12 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subscription_status') THEN
+    CREATE TYPE subscription_status AS ENUM ('active', 'past_due', 'expired', 'canceled');
+  END IF;
+END $$;
+
+DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
     CREATE TYPE payment_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'expired', 'refunded');
   END IF;
@@ -50,7 +56,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 3. Users Profile Table (Extends Supabase auth.users)
+-- 3. Users Profile Table (Directly bound to Supabase auth.users.id)
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
@@ -72,6 +78,24 @@ CREATE TRIGGER trg_users_updated_at
   BEFORE UPDATE ON public.users
   FOR EACH ROW
   EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+-- 3b. Security Trigger: Prevent client-side modification of sensitive plan & tier fields
+CREATE OR REPLACE FUNCTION public.protect_user_plan()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- If caller is authenticated user (client API) and NOT database superuser/service_role, freeze plan
+  IF current_user != 'service_role' AND (auth.role() = 'authenticated' OR auth.role() = 'anon') THEN
+    NEW.plan := OLD.plan;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_protect_user_plan ON public.users;
+CREATE TRIGGER trg_protect_user_plan
+  BEFORE UPDATE ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.protect_user_plan();
 
 -- 4. Strategies Table
 CREATE TABLE IF NOT EXISTS public.strategies (
@@ -151,12 +175,12 @@ CREATE TABLE IF NOT EXISTS public.daily_statistics (
   UNIQUE(user_id, date)
 );
 
--- 8. Subscriptions Table (Crypto-compatible)
+-- 8. Subscriptions Table (Strict status constraint)
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
   plan subscription_plan NOT NULL,
-  status TEXT NOT NULL DEFAULT 'active', -- active, past_due, expired, canceled
+  status subscription_status NOT NULL DEFAULT 'active',
   started_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc'::text, NOW()),
   expires_at TIMESTAMPTZ,
   provider TEXT NOT NULL DEFAULT 'crypto',
@@ -172,7 +196,7 @@ CREATE TRIGGER trg_subscriptions_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.set_updated_at_timestamp();
 
--- 9. Crypto Payments Table (Exclusive USDT on BSC gateway)
+-- 9. Crypto Payments Table (Exclusive USDT on BSC with strict CHECK constraints)
 CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
@@ -180,9 +204,9 @@ CREATE TABLE IF NOT EXISTS public.payments (
   provider_payment_id TEXT,
   payment_method payment_method NOT NULL DEFAULT 'crypto',
   plan subscription_plan NOT NULL,
-  amount_usdt NUMERIC(18, 6) NOT NULL,
-  token TEXT NOT NULL DEFAULT 'USDT',
-  network TEXT NOT NULL DEFAULT 'BSC',
+  amount_usdt NUMERIC(18, 6) NOT NULL CHECK (amount_usdt > 0),
+  token TEXT NOT NULL DEFAULT 'USDT' CHECK (token = 'USDT'),
+  network TEXT NOT NULL DEFAULT 'BSC' CHECK (network = 'BSC'),
   payment_address TEXT,
   transaction_hash TEXT,
   status payment_status NOT NULL DEFAULT 'pending',
@@ -240,7 +264,25 @@ CREATE TABLE IF NOT EXISTS public.chart_analyses (
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 13. AI Usage Table (Monthly Quota & Limits Tracking)
+-- 13. AI Monthly Quotas Table (Atomic Counter by User & Year-Month)
+CREATE TABLE IF NOT EXISTS public.ai_monthly_quotas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  year_month TEXT NOT NULL, -- Format 'YYYY-MM'
+  chart_analysis_count INTEGER DEFAULT 0 NOT NULL CHECK (chart_analysis_count >= 0),
+  review_count INTEGER DEFAULT 0 NOT NULL CHECK (review_count >= 0),
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE(user_id, year_month)
+);
+
+DROP TRIGGER IF EXISTS trg_ai_quotas_updated_at ON public.ai_monthly_quotas;
+CREATE TRIGGER trg_ai_quotas_updated_at
+  BEFORE UPDATE ON public.ai_monthly_quotas
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+-- Historical audit log for AI calls
 CREATE TABLE IF NOT EXISTS public.ai_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
@@ -250,6 +292,168 @@ CREATE TABLE IF NOT EXISTS public.ai_usage (
   output_tokens INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
+
+-- ============================================================================
+-- ATOMIC QUOTA CHECK AND INCREMENT FUNCTION
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.increment_and_check_ai_quota(
+  p_user_id UUID,
+  p_feature TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_plan subscription_plan;
+  v_limit INTEGER;
+  v_month TEXT;
+  v_current_count INTEGER;
+BEGIN
+  -- 1. Fetch user's current plan
+  SELECT plan INTO v_plan FROM public.users WHERE id = p_user_id;
+  IF NOT FOUND THEN
+    v_plan := 'free'::subscription_plan;
+  END IF;
+
+  -- 2. Determine quota limit based on plan & feature
+  IF p_feature = 'chart_analysis' THEN
+    IF v_plan = 'premium' THEN
+      v_limit := 999999; -- Unlimited
+    ELSIF v_plan = 'pro' THEN
+      v_limit := 100;
+    ELSE
+      v_limit := 5; -- Free tier
+    END IF;
+  ELSE
+    IF v_plan = 'premium' THEN
+      v_limit := 999999;
+    ELSIF v_plan = 'pro' THEN
+      v_limit := 50;
+    ELSE
+      v_limit := 3;
+    END IF;
+  END IF;
+
+  v_month := to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM');
+
+  -- 3. Upsert into monthly quota table atomically
+  INSERT INTO public.ai_monthly_quotas (user_id, year_month, chart_analysis_count, review_count)
+  VALUES (
+    p_user_id,
+    v_month,
+    CASE WHEN p_feature = 'chart_analysis' THEN 0 ELSE 0 END,
+    CASE WHEN p_feature = 'chart_analysis' THEN 0 ELSE 0 END
+  )
+  ON CONFLICT (user_id, year_month) DO NOTHING;
+
+  -- 4. Check current usage
+  IF p_feature = 'chart_analysis' THEN
+    SELECT chart_analysis_count INTO v_current_count
+    FROM public.ai_monthly_quotas
+    WHERE user_id = p_user_id AND year_month = v_month;
+
+    IF v_current_count >= v_limit THEN
+      RETURN jsonb_build_object(
+        'allowed', false,
+        'current_count', v_current_count,
+        'limit', v_limit,
+        'plan', v_plan,
+        'error', 'Monthly chart analysis quota reached'
+      );
+    END IF;
+
+    -- Increment atomically
+    UPDATE public.ai_monthly_quotas
+    SET chart_analysis_count = chart_analysis_count + 1
+    WHERE user_id = p_user_id AND year_month = v_month
+    RETURNING chart_analysis_count INTO v_current_count;
+  ELSE
+    SELECT review_count INTO v_current_count
+    FROM public.ai_monthly_quotas
+    WHERE user_id = p_user_id AND year_month = v_month;
+
+    IF v_current_count >= v_limit THEN
+      RETURN jsonb_build_object(
+        'allowed', false,
+        'current_count', v_current_count,
+        'limit', v_limit,
+        'plan', v_plan,
+        'error', 'Monthly AI review quota reached'
+      );
+    END IF;
+
+    UPDATE public.ai_monthly_quotas
+    SET review_count = review_count + 1
+    WHERE user_id = p_user_id AND year_month = v_month
+    RETURNING review_count INTO v_current_count;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'allowed', true,
+    'current_count', v_current_count,
+    'limit', v_limit,
+    'plan', v_plan
+  );
+END;
+$$;
+
+-- ============================================================================
+-- AUTOMATIC PROFILE PROVISIONING TRIGGER (Supabase auth.users -> public.users)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_name TEXT;
+BEGIN
+  -- Extract name from metadata or fallback to email local-part
+  v_name := COALESCE(
+    NEW.raw_user_meta_data->>'name',
+    NEW.raw_user_meta_data->>'full_name',
+    split_part(NEW.email, '@', 1)
+  );
+
+  INSERT INTO public.users (
+    id,
+    email,
+    name,
+    plan,
+    currency,
+    currency_symbol,
+    timezone,
+    default_risk_unit,
+    default_risk_value,
+    initial_capital,
+    onboarding_completed
+  ) VALUES (
+    NEW.id,
+    NEW.email,
+    v_name,
+    'free',
+    'USD',
+    '$',
+    'UTC',
+    '%',
+    1.0,
+    10000.00,
+    false
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================================================
 -- PERFORMANCE INDEXES
@@ -265,11 +469,12 @@ CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(status);
 CREATE INDEX IF NOT EXISTS idx_payments_tx_hash ON public.payments(transaction_hash);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON public.subscriptions(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_chart_analyses_user ON public.chart_analyses(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_monthly_quotas_user ON public.ai_monthly_quotas(user_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_feature ON public.ai_usage(user_id, feature, created_at DESC);
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
--- Strict user isolation. Client can never elevate permissions or modify status.
+-- Strict user isolation by auth.uid(). Client cannot modify plan or elevate tier.
 -- ============================================================================
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -282,6 +487,7 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chart_analyses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_monthly_quotas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
 
 -- USERS POLICIES
@@ -291,7 +497,8 @@ CREATE POLICY "Users can view own profile"
 
 CREATE POLICY "Users can update own profile preferences"
   ON public.users FOR UPDATE
-  USING (auth.uid() = id);
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
 
 -- TRADES POLICIES
 CREATE POLICY "Users can select own trades"
@@ -325,7 +532,7 @@ CREATE POLICY "Users can view own statistics"
   ON public.daily_statistics FOR SELECT
   USING (auth.uid() = user_id);
 
--- SUBSCRIPTIONS POLICIES (Read-only for client; server handles activation)
+-- SUBSCRIPTIONS POLICIES (Read-only for client; server handles activation via service role)
 CREATE POLICY "Users can view own subscriptions"
   ON public.subscriptions FOR SELECT
   USING (auth.uid() = user_id);
@@ -336,7 +543,7 @@ CREATE POLICY "Users can view own payments"
   USING (auth.uid() = user_id);
 
 -- PAYMENT EVENTS POLICIES (Locked to service role only)
--- No public user access. Only server service role key can read/write payment_events.
+-- Default deny for client.
 
 -- AI REVIEWS POLICIES
 CREATE POLICY "Users can view own AI reviews"
@@ -354,6 +561,11 @@ CREATE POLICY "Users can insert own chart analyses"
 
 CREATE POLICY "Users can delete own chart analyses"
   ON public.chart_analyses FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- AI MONTHLY QUOTAS POLICIES (Read-only for user)
+CREATE POLICY "Users can view own monthly quota"
+  ON public.ai_monthly_quotas FOR SELECT
   USING (auth.uid() = user_id);
 
 -- AI USAGE POLICIES
