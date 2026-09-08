@@ -45,6 +45,54 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// Supabase Proxy to securely handle requests without "Forbidden use of secret API key in browser"
+app.all('/api/supabase-proxy/*', async (req: Request, res: Response) => {
+  try {
+    const targetPath = req.params[0] || '';
+    const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://letrhnlcswjbmmdyqarx.supabase.co';
+    const cleanBaseUrl = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+    const targetUrl = new URL(`${cleanBaseUrl}/${targetPath}`);
+
+    Object.entries(req.query).forEach(([k, v]) => {
+      if (typeof v === 'string') targetUrl.searchParams.set(k, v);
+    });
+
+    const headers: Record<string, string> = {};
+    const forwardHeaders = ['authorization', 'apikey', 'content-type', 'x-client-info', 'prefer'];
+    for (const h of forwardHeaders) {
+      if (req.headers[h]) headers[h] = req.headers[h] as string;
+    }
+
+    const serverKey = process.env.SUPABASE_SERVICE_ROLE_KEY || (req.headers['apikey'] as string);
+    if (serverKey) {
+      if (!headers['apikey']) headers['apikey'] = serverKey;
+      if (!headers['authorization']) headers['authorization'] = `Bearer ${serverKey}`;
+    }
+
+    const hasBody = ['POST', 'PUT', 'PATCH'].includes(req.method) && req.body && Object.keys(req.body).length > 0;
+    const response = await fetch(targetUrl.toString(), {
+      method: req.method,
+      headers: {
+        ...headers,
+        'User-Agent': 'TradeIQ-Node-Server/1.0',
+      },
+      body: hasBody ? JSON.stringify(req.body) : undefined,
+    });
+
+    res.status(response.status);
+    response.headers.forEach((val, name) => {
+      if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(name.toLowerCase())) {
+        res.setHeader(name, val);
+      }
+    });
+
+    const data = await response.text();
+    return res.send(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Supabase proxy request failed' });
+  }
+});
+
 // User Subscription & Expiration Status (Supabase backed)
 app.get('/api/user/subscription', async (req: Request, res: Response) => {
   try {

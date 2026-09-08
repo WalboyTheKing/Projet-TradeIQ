@@ -208,6 +208,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string
   ): Promise<{ error?: string; needsEmailVerification?: boolean }> => {
     try {
+      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      const emailRedirectTo = isLocalhost
+        ? `${window.location.origin}/auth/callback`
+        : 'https://projet-tradeiq.vercel.app/auth/callback';
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -216,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name: name.trim(),
             full_name: name.trim(),
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo,
         },
       });
 
@@ -243,10 +248,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sign In with Google OAuth strictly via Supabase Auth
   const signInWithGoogle = async (): Promise<{ error?: string }> => {
     try {
+      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      const redirectTo = isLocalhost
+        ? `${window.location.origin}/auth/callback`
+        : 'https://projet-tradeiq.vercel.app/auth/callback';
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -283,8 +293,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Reset Password Request via Supabase Auth
   const resetPasswordForEmail = async (email: string): Promise<{ error?: string }> => {
     try {
+      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      const resetRedirectTo = isLocalhost
+        ? `${window.location.origin}/reset-password`
+        : 'https://projet-tradeiq.vercel.app/reset-password';
+
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: resetRedirectTo,
       });
 
       if (error) {

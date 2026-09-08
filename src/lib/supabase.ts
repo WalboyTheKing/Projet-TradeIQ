@@ -6,17 +6,62 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl =
-  (import.meta.env.NEXT_PUBLIC_SUPABASE_URL as string) ||
   (import.meta.env.VITE_SUPABASE_URL as string) ||
+  (import.meta.env.NEXT_PUBLIC_SUPABASE_URL as string) ||
   '';
 
 const supabaseAnonKey =
-  (import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
+  (import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string) ||
+  (import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string) ||
   '';
+
+/**
+ * Détecte si la clé fournie au navigateur est par erreur une clé secrète/admin (service_role ou sb_secret_*)
+ */
+export function isSecretApiKey(key: string): boolean {
+  if (!key) return false;
+  if (key.startsWith('sb_secret_')) return true;
+  if (key.toLowerCase().includes('service_role')) return true;
+  try {
+    const parts = key.split('.');
+    if (parts.length === 3) {
+      const payloadStr = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+      const payload = JSON.parse(payloadStr);
+      if (payload && payload.role === 'service_role') {
+        return true;
+      }
+    }
+  } catch {
+    // Erreur de décodage ignorée
+  }
+  return false;
+}
 
 export const isSupabaseConfigured: boolean =
   Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project'));
+
+// Custom fetch handler that gracefully routes through our backend proxy if a secret key is present in client-side config,
+// preventing Supabase's "Forbidden use of secret API key in browser" 401 error.
+const customFetch: typeof fetch = async (input, init) => {
+  const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+  if (isSecretApiKey(supabaseAnonKey) && typeof window !== 'undefined') {
+    try {
+      const urlObj = new URL(urlString);
+      const configuredHost = supabaseUrl ? new URL(supabaseUrl).host : '';
+      if (configuredHost && urlObj.host === configuredHost) {
+        const proxyUrl = `/api/supabase-proxy${urlObj.pathname}${urlObj.search}`;
+        return await fetch(proxyUrl, init);
+      }
+    } catch {
+      // Fallback to standard fetch
+    }
+  }
+
+  return fetch(input, init);
+};
 
 export const supabase: SupabaseClient = createClient(
   isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
@@ -27,6 +72,9 @@ export const supabase: SupabaseClient = createClient(
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storage: window.localStorage,
+    },
+    global: {
+      fetch: customFetch,
     },
   }
 );
@@ -39,6 +87,13 @@ export function getFriendlyAuthErrorMessage(error: any): string {
 
   const message = (error.message || error.error_description || String(error)).toLowerCase();
 
+  if (
+    message.includes('forbidden use of secret api key in browser') ||
+    message.includes('secret api key in browser') ||
+    message.includes('secret api key')
+  ) {
+    return 'Configuration Vercel incorrecte : la clé secrète (service_role) a été configurée dans le frontend au lieu de la clé publique (anon). Dans votre tableau de bord Vercel > Settings > Environment Variables, remplacez la valeur de VITE_SUPABASE_ANON_KEY par votre clé publique "anon" (disponible dans Supabase > Settings > API > Project API keys > anon public).';
+  }
   if (message.includes('invalid login credentials') || message.includes('invalid_grant')) {
     return 'Adresse email ou mot de passe incorrect.';
   }

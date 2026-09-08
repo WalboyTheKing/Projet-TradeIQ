@@ -26,13 +26,29 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onNavigat
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const searchParams = new URLSearchParams(window.location.search);
 
-        const errorDesc = hashParams.get('error_description') || searchParams.get('error_description');
+        const errorDesc = hashParams.get('error_description') || searchParams.get('error_description') || searchParams.get('error');
         if (errorDesc) {
           if (active) setError(decodeURIComponent(errorDesc));
           return;
         }
 
-        // Supabase auto-detects session in URL with detectSessionInUrl: true
+        // 1. Support PKCE code exchange if ?code=... is in query params
+        const code = searchParams.get('code');
+        if (code) {
+          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            console.warn('[OAuth] Code exchange notice:', exchangeError.message);
+          } else if (exchangeData?.session?.user && active) {
+            await refreshProfile();
+            if (window.history.replaceState) {
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+            onSuccess();
+            return;
+          }
+        }
+
+        // 2. Supabase auto-detects session in URL with detectSessionInUrl: true
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
