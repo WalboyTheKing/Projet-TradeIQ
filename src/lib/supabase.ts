@@ -42,12 +42,13 @@ export function isSecretApiKey(key: string): boolean {
 export const isSupabaseConfigured: boolean =
   Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project'));
 
-// Custom fetch handler that gracefully routes through our backend proxy if a secret key is present in client-side config,
-// preventing Supabase's "Forbidden use of secret API key in browser" 401 error.
+// Custom fetch handler that gracefully routes through our backend proxy in development/container environments
+// where server.ts is running. On Vercel (static Vite SPA), /api/supabase-proxy does not exist so standard fetch is used.
 const customFetch: typeof fetch = async (input, init) => {
   const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
 
-  if (isSecretApiKey(supabaseAnonKey) && typeof window !== 'undefined') {
+  if (!isVercel && isSecretApiKey(supabaseAnonKey) && typeof window !== 'undefined') {
     try {
       const urlObj = new URL(urlString);
       const configuredHost = supabaseUrl ? new URL(supabaseUrl).host : '';

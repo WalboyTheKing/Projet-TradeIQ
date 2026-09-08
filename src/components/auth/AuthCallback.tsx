@@ -20,25 +20,57 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onNavigat
   useEffect(() => {
     let active = true;
 
+    // Listen to Supabase background auth state changes (in case detectSessionInUrl completes automatically)
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('[OAuth Diagnostic] onAuthStateChange event:', event, 'hasSession:', !!newSession);
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && newSession?.user && active) {
+        try {
+          await refreshProfile();
+          if (window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+          onSuccess();
+        } catch (profileErr) {
+          console.warn('[OAuth Diagnostic] Profile sync warning:', profileErr);
+          onSuccess();
+        }
+      }
+    });
+
     async function handleOAuthReturn() {
       try {
-        // Parse error from hash or search
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const searchParams = new URLSearchParams(window.location.search);
 
+        const code = searchParams.get('code');
         const errorDesc = hashParams.get('error_description') || searchParams.get('error_description') || searchParams.get('error');
+
+        console.log('[OAuth Diagnostic] Return URL inspected:', {
+          hasCode: Boolean(code),
+          codePrefix: code ? code.substring(0, 6) + '...' : null,
+          hasHash: Boolean(window.location.hash),
+          hasErrorDesc: Boolean(errorDesc),
+        });
+
         if (errorDesc) {
+          console.error('[OAuth Diagnostic] Error returned from provider:', errorDesc);
           if (active) setError(decodeURIComponent(errorDesc));
           return;
         }
 
         // 1. Support PKCE code exchange if ?code=... is in query params
-        const code = searchParams.get('code');
         if (code) {
+          console.log('[OAuth Diagnostic] Attempting exchangeCodeForSession with code...');
           const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
           if (exchangeError) {
-            console.warn('[OAuth] Code exchange notice:', exchangeError.message);
+            console.error('[OAuth Diagnostic] exchangeCodeForSession error:', {
+              message: exchangeError.message,
+              status: exchangeError.status,
+              name: exchangeError.name,
+            });
           } else if (exchangeData?.session?.user && active) {
+            console.log('[OAuth Diagnostic] Code exchange succeeded, user:', exchangeData.session.user.email);
             await refreshProfile();
             if (window.history.replaceState) {
               window.history.replaceState(null, '', window.location.pathname);
@@ -50,39 +82,49 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onNavigat
 
         // 2. Supabase auto-detects session in URL with detectSessionInUrl: true
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('[OAuth Diagnostic] getSession result:', {
+          hasSession: Boolean(session),
+          userId: session?.user?.id,
+          errorMessage: sessionError?.message,
+        });
 
         if (sessionError) {
+          console.error('[OAuth Diagnostic] getSession error:', sessionError);
           if (active) setError(sessionError.message);
           return;
         }
 
         if (session?.user) {
-          // Sync profile
+          console.log('[OAuth Diagnostic] Session found, synchronizing profile...');
           await refreshProfile();
-
-          // Clear auth hash from URL for a clean state
           if (window.history.replaceState) {
             window.history.replaceState(null, '', window.location.pathname);
           }
-
-          if (active) {
-            onSuccess();
-          }
+          if (active) onSuccess();
         } else {
-          // If no immediate session, give it 1 second or listen for change
+          // Give it a brief delay in case background processing is finishing
           const timeout = setTimeout(async () => {
-            const { data: retryData } = await supabase.auth.getSession();
+            const { data: retryData, error: retryError } = await supabase.auth.getSession();
+            console.log('[OAuth Diagnostic] Retry getSession (1s):', {
+              hasSession: Boolean(retryData?.session),
+              retryError: retryError?.message,
+            });
+
             if (retryData?.session && active) {
               await refreshProfile();
               onSuccess();
             } else if (active) {
-              setError('Impossible de finaliser l’authentification Google. Veuillez réessayer.');
+              setError(
+                retryError?.message ||
+                'Impossible de finaliser l’authentification Google (aucune session valide trouvée après l\'échange du code).'
+              );
             }
-          }, 1000);
+          }, 1200);
 
           return () => clearTimeout(timeout);
         }
       } catch (err: any) {
+        console.error('[OAuth Diagnostic] Exception in handleOAuthReturn:', err);
         if (active) setError(err.message || 'Erreur lors du traitement OAuth.');
       }
     }
@@ -91,6 +133,7 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onNavigat
 
     return () => {
       active = false;
+      authListener?.subscription.unsubscribe();
     };
   }, [onSuccess, refreshProfile]);
 
