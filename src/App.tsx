@@ -278,24 +278,18 @@ export default function App() {
     );
   }
 
-  // 7. If user is NOT authenticated and hasn't explicitly chosen demo mode, show Login or Landing
-  if (!user && !isDemo) {
+  // 7. Strict Authentication Check: Unauthenticated users can only access Landing Page or Auth Pages
+  if (!user) {
     if (showLanding) {
       return (
         <LandingPage
           onLogin={() => navigateTo('/login', 'login')}
           onStartFree={() => navigateTo('/register', 'register')}
-          onViewDemo={() => {
-            storageService.setDemoMode(true);
-            setIsDemo(true);
-            setShowLanding(false);
-            navigateTo('/dashboard', null);
-          }}
         />
       );
     }
 
-    // Default to LoginPage for private application access
+    // Default to LoginPage for private application access (Dashboard, Journal, Settings, etc.)
     return (
       <LoginPage
         onNavigateRegister={() => navigateTo('/register', 'register')}
@@ -312,13 +306,15 @@ export default function App() {
     );
   }
 
-  // 8. If landing page is explicitly requested while in demo
+  // 8. If authenticated user explicitly requests to view the landing page
   if (showLanding) {
     return (
       <LandingPage
-        onLogin={() => navigateTo('/login', 'login')}
-        onStartFree={() => navigateTo('/register', 'register')}
-        onViewDemo={() => {
+        onLogin={() => {
+          setShowLanding(false);
+          navigateTo('/dashboard', null);
+        }}
+        onStartFree={() => {
           setShowLanding(false);
           navigateTo('/dashboard', null);
         }}

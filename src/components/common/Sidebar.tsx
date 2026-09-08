@@ -65,19 +65,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
 }) => {
   const profile: UserProfile = {
-    id: userProfile?.id || 'usr_default',
-    name: userProfile?.name || 'Alexandre R.',
-    email: userProfile?.email || 'trader@tradeiq.io',
+    id: userProfile?.id || '',
+    name: userProfile?.name || 'Trader',
+    email: userProfile?.email || '',
     currency: userProfile?.currency || 'USD',
     currencySymbol: userProfile?.currencySymbol || '$',
-    timezone: userProfile?.timezone || 'UTC+1',
+    timezone: userProfile?.timezone || 'UTC',
     defaultRiskUnit: userProfile?.defaultRiskUnit || '%',
     defaultRiskValue: userProfile?.defaultRiskValue || 1.0,
-    initialCapital: userProfile?.initialCapital || 25000,
-    plan: userProfile?.plan || 'pro',
+    initialCapital: userProfile?.initialCapital || 10000,
+    plan: userProfile?.plan || 'free',
     favoriteMarkets: userProfile?.favoriteMarkets || ['Forex', 'Crypto', 'Indices'],
-    onboardingCompleted: userProfile?.onboardingCompleted ?? true,
-    subscriptionTier: userProfile?.subscriptionTier || 'PRO',
+    onboardingCompleted: userProfile?.onboardingCompleted ?? false,
+    subscriptionTier: userProfile?.subscriptionTier || 'STARTER',
   };
 
   const effectiveMobileOpen = isOpen || isMobileOpen;

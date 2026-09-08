@@ -361,19 +361,6 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
                       Always confirm that you are sending <strong>USDT on BNB Smart Chain (BEP-20)</strong>.
                     </p>
                   </div>
-
-                  {/* Sandbox Dev Simulation Button */}
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500">Preview & Testing Sandbox</span>
-                    <button
-                      onClick={handleSimulateSandboxPayment}
-                      disabled={simulating}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
-                    >
-                      {simulating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 text-emerald-400" />}
-                      Simulate Confirmation (Test Sandbox)
-                    </button>
-                  </div>
                 </>
               )}
             </>

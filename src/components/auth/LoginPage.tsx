@@ -4,7 +4,7 @@
 // ============================================================================
 
 import React, { useState } from 'react';
-import { BarChart3, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { BarChart3, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginPageProps {
@@ -20,7 +20,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onSuccess,
   onNavigateHome,
 }) => {
-  const { signInWithEmail, signInWithGoogle, isConfigured } = useAuth();
+  const { signInWithEmail, signInWithGoogle } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -91,14 +91,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-2.5 text-rose-300 text-xs leading-relaxed animate-in fade-in duration-200">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
             <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Configuration notice if running in local sandbox without Supabase keys */}
-        {!isConfigured && (
-          <div className="mb-5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2">
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            <span>Mode Sandbox : vous pouvez vous connecter avec n'importe quel email.</span>
           </div>
         )}
 

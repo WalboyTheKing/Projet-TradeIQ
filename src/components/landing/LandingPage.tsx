@@ -20,11 +20,10 @@ import { APP_CONFIG } from '../../config/appConfig';
 
 interface LandingPageProps {
   onStartFree: () => void;
-  onViewDemo: () => void;
-  onLogin?: () => void;
+  onLogin: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDemo, onLogin }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin }) => {
   const features = [
     {
       title: 'Trade Journal',
@@ -75,7 +74,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
     },
     {
       q: 'Can I test the platform with realistic data before importing my trades?',
-      a: 'Yes! Click "View Demo" to access the full platform populated with 45+ realistic demo trades across Forex, Crypto, Indices, and Commodities. You can switch between Demo and Live mode at any time.',
+      a: 'Yes! Once registered, TRADEIQ provides a sample institutional dataset so you can explore all quant dashboards, or switch immediately to clean live data with your own broker history.',
     },
     {
       q: 'Can I export my data or import from MetaTrader, TradingView, or proprietary brokers?',
@@ -104,25 +103,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
           </div>
 
           <div className="flex items-center gap-3">
-            {onLogin && (
-              <button
-                onClick={onLogin}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-              >
-                Connexion
-              </button>
-            )}
             <button
-              onClick={onViewDemo}
-              className="px-3.5 py-1.5 text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors cursor-pointer"
+              onClick={onLogin}
+              className="px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
             >
-              View Demo
+              Connexion
             </button>
             <button
               onClick={onStartFree}
               className="px-4 py-1.5 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg shadow-[0_0_20px_rgba(52,211,153,0.3)] transition-all cursor-pointer"
             >
-              Start Free
+              Créer un compte
             </button>
           </div>
         </div>
@@ -152,21 +143,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onViewDem
               onClick={onStartFree}
               className="w-full sm:w-auto px-7 py-3 text-sm font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl shadow-[0_0_25px_rgba(52,211,153,0.35)] transition-all flex items-center justify-center gap-2"
             >
-              <span>Start Free</span>
+              <span>Commencer gratuitement</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
             <button
-              onClick={onViewDemo}
+              onClick={onLogin}
               className="w-full sm:w-auto px-7 py-3 text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
-              <Terminal className="w-4 h-4 text-amber-400" />
-              <span>View Interactive Demo</span>
+              <span>Se connecter</span>
             </button>
           </div>
 
           <div className="mt-8 text-xs text-slate-400 font-mono">
-            No credit card required • Instant demo account • 100% private data
+            Supabase Auth sécurisé • Données 100% privées & chiffrées
           </div>
 
           {/* Hero Terminal Snapshot Graphic */}

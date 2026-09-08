@@ -18,25 +18,25 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_PROFILE: UserProfile = {
-  id: 'usr_default',
-  name: 'Alexandre R.',
-  email: 'trader@tradeiq.io',
+  id: '',
+  name: '',
+  email: '',
   currency: 'USD',
   currencySymbol: '$',
-  timezone: 'UTC+1 (London/Paris)',
+  timezone: 'UTC',
   defaultRiskUnit: '%',
   defaultRiskValue: 1.0,
-  initialCapital: 25000,
-  plan: 'pro',
+  initialCapital: 10000,
+  plan: 'free',
   favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
-  onboardingCompleted: true,
+  onboardingCompleted: false,
 };
 
 class StorageService {
   // Demo mode status
   isDemoMode(): boolean {
     const val = localStorage.getItem(STORAGE_KEYS.IS_DEMO_MODE);
-    return val !== null ? val === 'true' : true; // Default to true so user sees live analytics immediately
+    return val === 'true'; // Default to false (Live mode)
   }
 
   setDemoMode(isDemo: boolean): void {
