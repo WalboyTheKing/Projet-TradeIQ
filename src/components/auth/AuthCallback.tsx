@@ -1,12 +1,13 @@
 // ============================================================================
 // OAUTH CALLBACK HANDLER — TRADEIQ (/auth/callback)
-// Resolves Supabase Google OAuth tokens, validates session, and routes to Dashboard
+// Resolves Supabase Google OAuth: supports both PKCE (?code=) and Implicit (#access_token=)
 // ============================================================================
 
-import React, { useEffect, useState } from 'react';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { storageService } from '../../lib/storage';
 
 interface AuthCallbackProps {
   onSuccess: () => void;
@@ -16,124 +17,172 @@ interface AuthCallbackProps {
 export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onNavigateLogin }) => {
   const { refreshProfile } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const completedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
 
-    // Listen to Supabase background auth state changes (in case detectSessionInUrl completes automatically)
+    // Traitement unifié de la session valide
+    const handleAuthSuccess = async (userId: string) => {
+      if (completedRef.current || !active) return;
+      completedRef.current = true;
+
+      // 1. Nettoyage immédiat de l'URL pour ne laisser aucun fragment ni paramètre sensible
+      if (window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+
+      // 2. Désactivation stricte du mode Démo
+      storageService.setDemoMode(false);
+
+      // 3. Synchronisation du profil public.users avec le véritable UUID
+      try {
+        await refreshProfile();
+      } catch (profileErr) {
+        console.warn('[OAuth] Warning profile sync:', profileErr);
+      }
+
+      // 4. Redirection vers l'application en mode authentifié
+      if (active) {
+        onSuccess();
+      }
+    };
+
+    // Écouteur Supabase pour capter les sessions résolues automatiquement en arrière-plan
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      console.log('[OAuth Diagnostic] onAuthStateChange event:', event, 'hasSession:', !!newSession);
-      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && newSession?.user && active) {
-        try {
-          await refreshProfile();
-          if (window.history.replaceState) {
-            window.history.replaceState(null, '', window.location.pathname);
-          }
-          onSuccess();
-        } catch (profileErr) {
-          console.warn('[OAuth Diagnostic] Profile sync warning:', profileErr);
-          onSuccess();
-        }
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && newSession?.user && !completedRef.current) {
+        await handleAuthSuccess(newSession.user.id);
       }
     });
 
-    async function handleOAuthReturn() {
+    async function processOAuthCallback() {
       try {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const rawHash = window.location.hash.startsWith('#')
+          ? window.location.hash.substring(1)
+          : window.location.hash;
+        const hashParams = new URLSearchParams(rawHash);
         const searchParams = new URLSearchParams(window.location.search);
 
-        const code = searchParams.get('code');
-        const errorDesc = hashParams.get('error_description') || searchParams.get('error_description') || searchParams.get('error');
-
-        console.log('[OAuth Diagnostic] Return URL inspected:', {
-          hasCode: Boolean(code),
-          codePrefix: code ? code.substring(0, 6) + '...' : null,
-          hasHash: Boolean(window.location.hash),
-          hasErrorDesc: Boolean(errorDesc),
-        });
+        // Détection d'erreurs éventuelles renvoyées par le fournisseur OAuth
+        const errorDesc =
+          hashParams.get('error_description') ||
+          searchParams.get('error_description') ||
+          hashParams.get('error') ||
+          searchParams.get('error');
 
         if (errorDesc) {
-          console.error('[OAuth Diagnostic] Error returned from provider:', errorDesc);
-          if (active) setError(decodeURIComponent(errorDesc));
+          if (window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+          if (active && !completedRef.current) {
+            setError(decodeURIComponent(errorDesc.replace(/\+/g, ' ')));
+          }
           return;
         }
 
-        // 1. Support PKCE code exchange if ?code=... is in query params
-        if (code) {
-          console.log('[OAuth Diagnostic] Attempting exchangeCodeForSession with code...');
-          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        const code = searchParams.get('code');
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
 
-          if (exchangeError) {
-            console.error('[OAuth Diagnostic] exchangeCodeForSession error:', {
-              message: exchangeError.message,
-              status: exchangeError.status,
-              name: exchangeError.name,
-            });
-          } else if (exchangeData?.session?.user && active) {
-            console.log('[OAuth Diagnostic] Code exchange succeeded, user:', exchangeData.session.user.email);
-            await refreshProfile();
-            if (window.history.replaceState) {
-              window.history.replaceState(null, '', window.location.pathname);
+        // ======================================================================
+        // FLUX B : Implicit Grant / Hash (#access_token=...&refresh_token=...)
+        // ======================================================================
+        if (accessToken && refreshToken) {
+          // Nettoyage immédiat de l'URL pour éliminer les jetons de la barre d'adresse et de l'historique
+          if (window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+
+          // supabase.auth.setSession enregistre les jetons et gère la persistance de manière sécurisée
+          const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (setSessionError) {
+            console.error('[OAuth] setSession error');
+            if (active && !completedRef.current) {
+              setError(setSessionError.message || 'Impossible de valider la session OAuth avec les jetons reçus.');
             }
-            onSuccess();
+            return;
+          }
+
+          if (setSessionData?.session?.user) {
+            await handleAuthSuccess(setSessionData.session.user.id);
             return;
           }
         }
 
-        // 2. Supabase auto-detects session in URL with detectSessionInUrl: true
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('[OAuth Diagnostic] getSession result:', {
-          hasSession: Boolean(session),
-          userId: session?.user?.id,
-          errorMessage: sessionError?.message,
-        });
+        // ======================================================================
+        // FLUX A : PKCE flow (?code=...)
+        // ======================================================================
+        else if (code) {
+          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-        if (sessionError) {
-          console.error('[OAuth Diagnostic] getSession error:', sessionError);
-          if (active) setError(sessionError.message);
-          return;
-        }
-
-        if (session?.user) {
-          console.log('[OAuth Diagnostic] Session found, synchronizing profile...');
-          await refreshProfile();
+          // Nettoyage de l'URL
           if (window.history.replaceState) {
             window.history.replaceState(null, '', window.location.pathname);
           }
-          if (active) onSuccess();
-        } else {
-          // Give it a brief delay in case background processing is finishing
-          const timeout = setTimeout(async () => {
-            const { data: retryData, error: retryError } = await supabase.auth.getSession();
-            console.log('[OAuth Diagnostic] Retry getSession (1s):', {
-              hasSession: Boolean(retryData?.session),
-              retryError: retryError?.message,
-            });
 
-            if (retryData?.session && active) {
-              await refreshProfile();
-              onSuccess();
-            } else if (active) {
-              setError(
-                retryError?.message ||
-                'Impossible de finaliser l’authentification Google (aucune session valide trouvée après l\'échange du code).'
-              );
+          if (exchangeError) {
+            // Si le code a déjà été consommé en arrière-plan, vérifions si la session est active
+            const { data: existingSession } = await supabase.auth.getSession();
+            if (existingSession?.session?.user) {
+              await handleAuthSuccess(existingSession.session.user.id);
+              return;
             }
-          }, 1200);
 
-          return () => clearTimeout(timeout);
+            console.error('[OAuth] exchangeCodeForSession error');
+            if (active && !completedRef.current) {
+              setError(exchangeError.message || 'Impossible d’échanger le code d’autorisation Google.');
+            }
+            return;
+          }
+
+          if (exchangeData?.session?.user) {
+            await handleAuthSuccess(exchangeData.session.user.id);
+            return;
+          }
         }
+
+        // ======================================================================
+        // Vérification de session résiduelle / auto-détectée
+        // ======================================================================
+        const { data: checkData } = await supabase.auth.getSession();
+        if (checkData?.session?.user) {
+          await handleAuthSuccess(checkData.session.user.id);
+          return;
+        }
+
+        // Court délai d'attente pour laisser à GoTrueClient le temps de finaliser
+        const timeout = setTimeout(async () => {
+          if (completedRef.current || !active) return;
+          const { data: retryData, error: retryError } = await supabase.auth.getSession();
+
+          if (retryData?.session?.user) {
+            await handleAuthSuccess(retryData.session.user.id);
+          } else if (active && !completedRef.current) {
+            setError(
+              retryError?.message ||
+              'Impossible de finaliser l’authentification Google : aucune session valide n’a été trouvée.'
+            );
+          }
+        }, 1000);
+
+        return () => clearTimeout(timeout);
       } catch (err: any) {
-        console.error('[OAuth Diagnostic] Exception in handleOAuthReturn:', err);
-        if (active) setError(err.message || 'Erreur lors du traitement OAuth.');
+        console.error('[OAuth] Exception during callback processing');
+        if (active && !completedRef.current) {
+          setError(err?.message || 'Une erreur est survenue lors du traitement de l’authentification.');
+        }
       }
     }
 
-    handleOAuthReturn();
+    processOAuthCallback();
 
     return () => {
       active = false;
-      authListener?.subscription.unsubscribe();
+      authListener?.subscription?.unsubscribe();
     };
   }, [onSuccess, refreshProfile]);
 

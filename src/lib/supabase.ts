@@ -42,13 +42,17 @@ export function isSecretApiKey(key: string): boolean {
 export const isSupabaseConfigured: boolean =
   Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project'));
 
-// Custom fetch handler that gracefully routes through our backend proxy in development/container environments
-// where server.ts is running. On Vercel (static Vite SPA), /api/supabase-proxy does not exist so standard fetch is used.
+// Custom fetch handler that gracefully routes through our backend proxy only in development/container environments
+// (where server.ts is running). On Vercel and production, static Vite SPA serves files and standard fetch is always used.
 const customFetch: typeof fetch = async (input, init) => {
   const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+  const isLocalServer =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.includes('.run.app'));
 
-  if (!isVercel && isSecretApiKey(supabaseAnonKey) && typeof window !== 'undefined') {
+  if (isLocalServer && isSecretApiKey(supabaseAnonKey) && typeof window !== 'undefined') {
     try {
       const urlObj = new URL(urlString);
       const configuredHost = supabaseUrl ? new URL(supabaseUrl).host : '';
