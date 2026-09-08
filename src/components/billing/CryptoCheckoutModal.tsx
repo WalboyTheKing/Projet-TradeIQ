@@ -15,6 +15,7 @@ import {
 import QRCode from 'qrcode';
 import { SubscriptionPlan, BillingInterval, PRICING_PLANS } from '../../lib/payments/pricing';
 import { CryptoPaymentSession } from '../../lib/payments/types';
+import { useAuth } from '../../context/AuthContext';
 
 interface CryptoCheckoutModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ interface CryptoCheckoutModalProps {
   plan: SubscriptionPlan;
   billingInterval: BillingInterval;
   onPaymentSuccess: (plan: SubscriptionPlan) => void;
+  userId?: string;
 }
 
 export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
@@ -30,7 +32,10 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
   plan,
   billingInterval,
   onPaymentSuccess,
+  userId: propUserId,
 }) => {
+  const { user } = useAuth();
+  const effectiveUserId = user?.id || propUserId || '';
   const [session, setSession] = useState<CryptoPaymentSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,8 +62,12 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
       try {
         const res = await fetch('/api/checkout/crypto', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': effectiveUserId,
+          },
           body: JSON.stringify({
+            userId: effectiveUserId,
             plan,
             billingInterval,
             network: 'BSC',

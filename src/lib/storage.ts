@@ -68,6 +68,11 @@ class StorageService {
     return updated;
   }
 
+  clearUserProfile(): void {
+    localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+    window.dispatchEvent(new Event('tradeiq-data-changed'));
+  }
+
   // Strategies
   getStrategies(): Strategy[] {
     try {

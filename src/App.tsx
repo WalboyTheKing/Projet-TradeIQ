@@ -34,8 +34,9 @@ import { AuthCallback } from './components/auth/AuthCallback';
 import { useAuth } from './context/AuthContext';
 
 import { storageService } from './lib/storage';
+import { tradeService } from './lib/tradeService';
 import { Trade, Strategy, UserProfile } from './types/trade';
-import { Loader2, BarChart3 } from 'lucide-react';
+import { Loader2, BarChart3, AlertTriangle, ArrowRight } from 'lucide-react';
 
 type AuthRoute = 'login' | 'register' | 'forgot-password' | 'reset-password' | 'callback' | null;
 
@@ -80,17 +81,89 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [user]);
 
+  // Enforce Real Mode when a verified Supabase user logs in
+  useEffect(() => {
+    if (user) {
+      storageService.setDemoMode(false);
+      setIsDemo(false);
+    }
+  }, [user]);
+
+  // Isolated Active Profile derivation:
+  // When user is authenticated in Real mode: strictly uses Supabase Auth + public.users (NO demo fallback)
+  // When in Demo mode: uses isolated Demo profile
+  const activeProfile: UserProfile = React.useMemo(() => {
+    if (user && !isDemo) {
+      const derivedName =
+        authProfile?.name ||
+        user.user_metadata?.name ||
+        user.user_metadata?.full_name ||
+        (user.email ? user.email.split('@')[0] : 'Trader');
+      return {
+        id: user.id,
+        name: derivedName,
+        email: user.email || authProfile?.email || '',
+        currency: authProfile?.currency || 'USD',
+        currencySymbol: authProfile?.currencySymbol || '$',
+        timezone: authProfile?.timezone || 'UTC',
+        defaultRiskUnit: authProfile?.defaultRiskUnit || '%',
+        defaultRiskValue: authProfile?.defaultRiskValue ?? 1.0,
+        initialCapital: authProfile?.initialCapital ?? 10000,
+        plan: authProfile?.plan || 'free',
+        favoriteMarkets: authProfile?.favoriteMarkets || ['Forex', 'Crypto', 'Indices'],
+        onboardingCompleted: authProfile?.onboardingCompleted ?? true,
+        subscriptionTier: (authProfile?.plan?.toUpperCase() === 'PREMIUM'
+          ? 'ELITE'
+          : authProfile?.plan?.toUpperCase() === 'PRO'
+          ? 'PRO'
+          : 'STARTER') as any,
+        accountCurrency: authProfile?.accountCurrency || 'USD',
+        monthlyProfitGoal: authProfile?.monthlyProfitGoal || 2000,
+        maxRiskPerTrade: authProfile?.maxRiskPerTrade || 2.0,
+      };
+    }
+
+    if (isDemo) {
+      return {
+        id: 'demo-session',
+        name: 'Compte Démo',
+        email: 'demo@tradeiq.internal',
+        currency: 'USD',
+        currencySymbol: '$',
+        timezone: 'UTC',
+        defaultRiskUnit: '%',
+        defaultRiskValue: 1.0,
+        initialCapital: 50000,
+        plan: 'pro',
+        favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
+        onboardingCompleted: true,
+        subscriptionTier: 'PRO',
+        accountCurrency: 'USD',
+        monthlyProfitGoal: 5000,
+        maxRiskPerTrade: 1.5,
+      };
+    }
+
+    return userProfile;
+  }, [user, isDemo, authProfile, userProfile]);
+
   // Load data from persistence service
-  const reloadData = useCallback(() => {
-    setTrades(storageService.getTrades());
-    setStrategies(storageService.getStrategies());
-    setIsDemo(storageService.isDemoMode());
-  }, []);
+  const reloadData = useCallback(async () => {
+    const currentDemo = storageService.isDemoMode();
+    setIsDemo(currentDemo);
+    const userId = user ? user.id : null;
+    const [loadedTrades, loadedStrats] = await Promise.all([
+      tradeService.getTrades(userId, currentDemo),
+      tradeService.getStrategies(userId, currentDemo),
+    ]);
+    setTrades(loadedTrades);
+    setStrategies(loadedStrats);
+  }, [user]);
 
   useEffect(() => {
     reloadData();
 
-    // Listen to storage changes
+    // Listen to storage/service changes
     const handleStorageChange = () => {
       reloadData();
     };
@@ -132,20 +205,25 @@ export default function App() {
     setAuthRoute(route);
   };
 
-  // Handlers
-  const handleSaveTrade = (tradeData: Omit<Trade, 'id' | 'created_at'>) => {
-    storageService.addTrade(tradeData);
-    reloadData();
+  // Handlers using tradeService with strict real/demo branching
+  const handleSaveTrade = async (tradeData: Omit<Trade, 'id' | 'created_at'>) => {
+    await tradeService.addTrade(user ? user.id : null, isDemo, tradeData);
+    await reloadData();
   };
 
-  const handleDeleteTrade = (id: string) => {
-    storageService.deleteTrade(id);
-    reloadData();
+  const handleDeleteTrade = async (id: string) => {
+    await tradeService.deleteTrade(user ? user.id : null, isDemo, id);
+    await reloadData();
   };
 
-  const handleAddStrategy = (stratData: Omit<Strategy, 'id' | 'created_at'>) => {
-    storageService.addStrategy(stratData);
-    reloadData();
+  const handleUpdateTrade = async (id: string, updates: Partial<Trade>) => {
+    await tradeService.updateTrade(user ? user.id : null, isDemo, id, updates);
+    await reloadData();
+  };
+
+  const handleAddStrategy = async (stratData: Omit<Strategy, 'id' | 'created_at'>) => {
+    await tradeService.addStrategy(user ? user.id : null, isDemo, stratData);
+    await reloadData();
   };
 
   const handleUpdateProfile = async (updated: Partial<UserProfile>) => {
@@ -165,22 +243,28 @@ export default function App() {
     }
   };
 
-  const handleResetDemoData = () => {
-    storageService.resetDemoData();
-    reloadData();
+  const handleResetDemoData = async () => {
+    tradeService.resetDemoData();
+    await reloadData();
   };
 
-  const handleToggleDemo = () => {
-    storageService.setDemoMode(!isDemo);
-    reloadData();
+  const handleToggleDemo = (val?: boolean) => {
+    const nextVal = typeof val === 'boolean' ? val : !isDemo;
+    storageService.setDemoMode(nextVal);
+    setIsDemo(nextVal);
   };
 
-  const handleImportTrades = (newTrades: Omit<Trade, 'id' | 'created_at'>[]) => {
-    newTrades.forEach((t) => storageService.addTrade(t));
-    reloadData();
+  const handleImportTrades = async (newTrades: Omit<Trade, 'id' | 'created_at'>[]) => {
+    await tradeService.importTrades(user ? user.id : null, isDemo, newTrades);
+    await reloadData();
   };
 
   const handleSignOut = async () => {
+    storageService.setDemoMode(false);
+    storageService.clearUserProfile();
+    setIsDemo(false);
+    setTrades([]);
+    setStrategies([]);
     await signOut();
     navigateTo('/login', 'login');
   };
@@ -279,12 +363,18 @@ export default function App() {
   }
 
   // 7. Strict Authentication Check: Unauthenticated users can only access Landing Page or Auth Pages
-  if (!user) {
+  if (!user && !isDemo) {
     if (showLanding) {
       return (
         <LandingPage
           onLogin={() => navigateTo('/login', 'login')}
           onStartFree={() => navigateTo('/register', 'register')}
+          onExploreDemo={() => {
+            storageService.setDemoMode(true);
+            setIsDemo(true);
+            setShowLanding(false);
+            navigateTo('/dashboard', null);
+          }}
         />
       );
     }
@@ -306,7 +396,7 @@ export default function App() {
     );
   }
 
-  // 8. If authenticated user explicitly requests to view the landing page
+  // 8. If user explicitly requests to view the landing page
   if (showLanding) {
     return (
       <LandingPage
@@ -318,6 +408,12 @@ export default function App() {
           setShowLanding(false);
           navigateTo('/dashboard', null);
         }}
+        onExploreDemo={() => {
+          storageService.setDemoMode(true);
+          setIsDemo(true);
+          setShowLanding(false);
+          navigateTo('/dashboard', null);
+        }}
       />
     );
   }
@@ -326,6 +422,7 @@ export default function App() {
   if (showOnboarding) {
     return (
       <OnboardingWizard
+        initialProfile={activeProfile}
         onComplete={async (profileData) => {
           await handleUpdateProfile(profileData);
           if (user) {
@@ -345,7 +442,7 @@ export default function App() {
     );
   }
 
-  // 10. Authenticated Application Workspace
+  // 10. Application Workspace (Real Authenticated or Isolated Demo Session)
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#090D14] text-slate-100 font-sans antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
       {/* Sidebar Navigation */}
@@ -359,7 +456,7 @@ export default function App() {
           setCurrentTab(tab);
           setIsMobileSidebarOpen(false);
         }}
-        userProfile={userProfile}
+        userProfile={activeProfile}
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
         onOpenUpgrade={() => setCurrentTab('billing')}
@@ -369,19 +466,50 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top Warning Banner if in Demo Mode */}
+        {isDemo && (
+          <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-3 text-amber-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                <strong className="text-amber-300">MODE DÉMO ACTIF :</strong> Vous consultez des données de simulation locales. Aucune donnée n'est envoyée à Supabase.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {user ? (
+                <button
+                  onClick={() => handleToggleDemo(false)}
+                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition-colors cursor-pointer"
+                >
+                  Basculer vers mon compte réel
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigateTo('/login', 'login')}
+                    className="px-3 py-1 text-xs font-bold rounded-lg bg-emerald-400 text-slate-950 hover:bg-emerald-300 transition-all cursor-pointer"
+                  >
+                    Se connecter
+                  </button>
+                  <button
+                    onClick={() => navigateTo('/register', 'register')}
+                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Créer un compte
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Top Header */}
         <Header
-          userProfile={userProfile}
+          userProfile={activeProfile}
           isDemo={isDemo}
           isDemoMode={isDemo}
-          onToggleDemoMode={(val) => {
-            storageService.setDemoMode(val);
-            setIsDemo(val);
-          }}
-          onToggleDemo={(val) => {
-            storageService.setDemoMode(val);
-            setIsDemo(val);
-          }}
+          onToggleDemoMode={(val) => handleToggleDemo(val)}
+          onToggleDemo={(val) => handleToggleDemo(val)}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onOpenAddTrade={() => setIsAddTradeOpen(true)}
           onOpenImport={() => setCurrentTab('import')}
@@ -396,7 +524,7 @@ export default function App() {
             {currentTab === 'dashboard' && (
               <DashboardOverview
                 trades={trades}
-                userProfile={userProfile}
+                userProfile={activeProfile}
                 onOpenAddTrade={() => setIsAddTradeOpen(true)}
                 onDeleteTrade={handleDeleteTrade}
                 onOpenChartAnalysis={() => setCurrentTab('chart-analysis')}
@@ -413,7 +541,7 @@ export default function App() {
             )}
 
             {currentTab === 'chart-analysis' && (
-              <AIChartAnalysisView userProfile={userProfile} />
+              <AIChartAnalysisView userProfile={activeProfile} />
             )}
 
             {currentTab === 'trade-analysis' && (
@@ -429,11 +557,11 @@ export default function App() {
             )}
 
             {currentTab === 'statistics' && (
-              <StatisticsView trades={trades} userProfile={userProfile} />
+              <StatisticsView trades={trades} userProfile={activeProfile} />
             )}
 
             {currentTab === 'performance' && (
-              <PerformanceView trades={trades} userProfile={userProfile} />
+              <PerformanceView trades={trades} userProfile={activeProfile} />
             )}
 
             {currentTab === 'strategies' && (
@@ -451,7 +579,7 @@ export default function App() {
             )}
 
             {(currentTab === 'ai-analysis' || currentTab === 'ai-review') && (
-              <AiAnalysisView trades={trades} userProfile={userProfile} />
+              <AiAnalysisView trades={trades} userProfile={activeProfile} />
             )}
 
             {currentTab === 'import' && (
@@ -459,19 +587,19 @@ export default function App() {
             )}
 
             {currentTab === 'reports' && (
-              <ReportsView trades={trades} userProfile={userProfile} />
+              <ReportsView trades={trades} userProfile={activeProfile} />
             )}
 
             {currentTab === 'billing' && (
               <BillingView
-                userProfile={userProfile}
+                userProfile={activeProfile}
                 onUpdateProfile={handleUpdateProfile}
               />
             )}
 
             {(currentTab === 'settings' || currentTab === 'subscription') && (
               <SettingsView
-                userProfile={userProfile}
+                userProfile={activeProfile}
                 onUpdateProfile={handleUpdateProfile}
                 onResetDemoData={handleResetDemoData}
                 isDemo={isDemo}

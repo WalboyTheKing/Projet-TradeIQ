@@ -7,6 +7,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured, getFriendlyAuthErrorMessage } from '../lib/supabase';
 import { UserProfile } from '../types/trade';
+import { storageService } from '../lib/storage';
 
 interface AuthContextType {
   user: User | null;
@@ -128,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (initialSession?.user && isMounted) {
+          storageService.setDemoMode(false);
           setSession(initialSession);
           setUser(initialSession.user);
           const prof = await fetchUserProfile(initialSession.user);
@@ -151,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
 
       if (currentUser) {
+        storageService.setDemoMode(false);
         const prof = await fetchUserProfile(currentUser);
         if (isMounted) setProfile(prof);
       } else {
@@ -272,6 +275,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(null);
       setProfile(null);
       localStorage.removeItem('tradeiq_onboarded');
+      localStorage.removeItem('tradeiq_user_profile');
+      storageService.setDemoMode(false);
     }
   };
 

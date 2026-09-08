@@ -21,9 +21,10 @@ import { APP_CONFIG } from '../../config/appConfig';
 interface LandingPageProps {
   onStartFree: () => void;
   onLogin: () => void;
+  onExploreDemo?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, onExploreDemo }) => {
   const features = [
     {
       title: 'Trade Journal',
@@ -141,7 +142,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin }
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={onStartFree}
-              className="w-full sm:w-auto px-7 py-3 text-sm font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl shadow-[0_0_25px_rgba(52,211,153,0.35)] transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-7 py-3 text-sm font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl shadow-[0_0_25px_rgba(52,211,153,0.35)] transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Commencer gratuitement</span>
               <ArrowRight className="w-4 h-4" />
@@ -149,10 +150,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin }
 
             <button
               onClick={onLogin}
-              className="w-full sm:w-auto px-7 py-3 text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-7 py-3 text-sm font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Se connecter</span>
             </button>
+
+            {onExploreDemo && (
+              <button
+                onClick={onExploreDemo}
+                className="w-full sm:w-auto px-6 py-3 text-sm font-semibold text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Explorer en Mode Démo</span>
+              </button>
+            )}
           </div>
 
           <div className="mt-8 text-xs text-slate-400 font-mono">

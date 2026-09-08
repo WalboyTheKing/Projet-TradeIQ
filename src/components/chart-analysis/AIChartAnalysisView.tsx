@@ -212,12 +212,18 @@ export const AIChartAnalysisView: React.FC<AIChartAnalysisViewProps> = ({ userPr
           : undefined,
       };
 
+      const effectiveUserId = userProfile?.id || '';
+
       const res = await fetch('/api/ai/chart-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-id': effectiveUserId,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          userId: effectiveUserId,
+        }),
       });
 
       if (!res.ok) {
@@ -232,7 +238,7 @@ export const AIChartAnalysisView: React.FC<AIChartAnalysisViewProps> = ({ userPr
       // Save to client history
       const savedRecord: SavedChartAnalysis = {
         id: data.id,
-        user_id: userProfile?.id || 'usr_default',
+        user_id: effectiveUserId,
         image_url: image.length < 250000 ? image : undefined, // save thumbnail if size reasonable
         market: data.chart.market,
         symbol: data.chart.symbol,

@@ -53,8 +53,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       const currObj = APP_CONFIG.currencies.find((c) => c.code === currency) || { symbol: '$' };
       onComplete(
         {
-          name: name.trim() || 'Alexandre R.',
-          email: email.trim() || 'trader@tradeiq.io',
+          name: name.trim() || initialProfile?.name || 'Trader',
+          email: email.trim() || initialProfile?.email || '',
           favoriteMarkets: selectedMarkets,
           currency,
           currencySymbol: currObj.symbol,
@@ -288,7 +288,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-left text-xs space-y-1.5 font-mono text-slate-300">
               <div className="flex justify-between">
                 <span className="text-slate-400">Trader:</span>
-                <span>{name || 'Alexandre R.'}</span>
+                <span>{name || initialProfile?.name || 'Trader'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Currency:</span>

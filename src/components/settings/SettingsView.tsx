@@ -402,6 +402,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onClose={() => setCheckoutPlan(null)}
           plan={checkoutPlan}
           billingInterval="monthly"
+          userId={userProfile.id}
           onPaymentSuccess={(newPlan) => {
             onUpdateProfile({
               plan: newPlan,

@@ -43,8 +43,13 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
   React.useEffect(() => {
     let isMounted = true;
     const fetchSub = async () => {
+      if (!userProfile?.id) return;
       try {
-        const res = await fetch('/api/user/subscription');
+        const res = await fetch(`/api/user/subscription?userId=${encodeURIComponent(userProfile.id)}`, {
+          headers: {
+            'x-user-id': userProfile.id,
+          },
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (isMounted && data.success && data.subscription) {
@@ -373,6 +378,7 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
           plan={selectedPlan}
           billingInterval={billingInterval}
           onPaymentSuccess={handlePaymentSuccess}
+          userId={userProfile.id}
         />
       )}
     </div>
