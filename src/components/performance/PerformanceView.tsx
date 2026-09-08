@@ -9,8 +9,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  LineChart,
-  Line,
 } from 'recharts';
 import {
   TrendingUp,
@@ -19,6 +17,8 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
+  Info,
+  PlusCircle,
 } from 'lucide-react';
 import { Trade, UserProfile } from '../../types/trade';
 import {
@@ -32,16 +32,40 @@ import {
 interface PerformanceViewProps {
   trades: Trade[];
   userProfile: UserProfile;
+  onOpenAddTrade?: () => void;
 }
 
-export const PerformanceView: React.FC<PerformanceViewProps> = ({ trades, userProfile }) => {
+export const PerformanceView: React.FC<PerformanceViewProps> = ({
+  trades,
+  userProfile,
+  onOpenAddTrade,
+}) => {
+  const initialCapital = Number(userProfile?.initialCapital) || 10000;
+
   const equityData = useMemo(() => {
-    return buildCumulativeEquitySeries(trades, userProfile.initialCapital);
-  }, [trades, userProfile.initialCapital]);
+    const raw = buildCumulativeEquitySeries(trades, initialCapital);
+    if (!raw || raw.length === 0) {
+      return [
+        { date: 'Initial', equity: initialCapital },
+        { date: 'Aujourd\'hui', equity: initialCapital },
+      ];
+    }
+    if (raw.length === 1) {
+      return [
+        raw[0],
+        { date: 'Aujourd\'hui', equity: raw[0].equity },
+      ];
+    }
+    return raw;
+  }, [trades, initialCapital]);
 
   const drawdown = useMemo(() => {
-    return calculateDrawdown(trades, userProfile.initialCapital);
-  }, [trades, userProfile.initialCapital]);
+    return calculateDrawdown(trades, initialCapital);
+  }, [trades, initialCapital]);
+
+  const finalEquity = drawdown?.finalEquity ?? initialCapital;
+  const peakEquity = drawdown?.peakEquity ?? Math.max(initialCapital, finalEquity);
+  const maxDrawdownPercent = drawdown?.maxDrawdownPercent ?? 0;
 
   const dailyPnlData = useMemo(() => {
     return calculateDailyPnl(trades);
@@ -85,10 +109,36 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ trades, userPr
           <div className="text-slate-600">|</div>
           <div>
             <span className="text-slate-400">Current DD: </span>
-            <span className="text-rose-400 font-bold">-{drawdown.maxDrawdownPercent.toFixed(1)}%</span>
+            <span className="text-rose-400 font-bold">-{maxDrawdownPercent.toFixed(1)}%</span>
           </div>
         </div>
       </div>
+
+      {/* Live Mode 0-Trade Guidance Banner */}
+      {trades.length === 0 && (
+        <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-950/20 text-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-100">Mode Live : Aucun trade enregistré pour l'instant</div>
+              <div className="text-xs text-slate-400">
+                Vos graphiques d'équité, drawdown, P&L quotidien et asymétrie Long / Short se mettront à jour dès que vous enregistrerez vos premières opérations.
+              </div>
+            </div>
+          </div>
+          {onOpenAddTrade && (
+            <button
+              onClick={onOpenAddTrade}
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-colors whitespace-nowrap self-start sm:self-auto flex items-center gap-1.5"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Nouveau Trade</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 1. EQUITY CURVE & DRAWDOWN TRACE */}
       <div className="rounded-xl border border-slate-800 bg-[#0F172A]/70 p-5">
@@ -96,11 +146,11 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ trades, userPr
           <div>
             <h2 className="text-sm font-bold text-slate-100">1. Portfolio Equity Growth & High Watermark</h2>
             <p className="text-[11px] text-slate-400">
-              Initial Capital: ${userProfile.initialCapital.toLocaleString()} • Terminal Equity: ${drawdown.finalEquity.toLocaleString()}
+              Initial Capital: ${initialCapital.toLocaleString()} • Terminal Equity: ${finalEquity.toLocaleString()}
             </p>
           </div>
           <span className="text-xs font-mono font-bold text-emerald-400">
-            Peak: ${drawdown.peakEquity.toLocaleString()}
+            Peak: ${peakEquity.toLocaleString()}
           </span>
         </div>
 
@@ -142,26 +192,32 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ trades, userPr
           <h2 className="text-sm font-bold text-slate-100 mb-1">2. Daily Net P&L Bars</h2>
           <p className="text-[11px] text-slate-400 mb-4">Green for winning sessions, Red for losses</p>
 
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyPnlData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <XAxis dataKey="date" stroke="#475569" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#090D14',
-                    borderColor: '#334155',
-                    fontSize: '11px',
-                  }}
-                  formatter={(val: any) => [`$${Number(val).toFixed(2)}`, 'Daily P&L']}
-                />
-                <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
-                  {dailyPnlData.map((entry, idx) => (
-                    <Cell key={`cell-${idx}`} fill={entry.pnl >= 0 ? '#10B981' : '#FB7185'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-56 w-full flex items-center justify-center">
+            {dailyPnlData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyPnlData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="date" stroke="#475569" fontSize={9} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#090D14',
+                      borderColor: '#334155',
+                      fontSize: '11px',
+                    }}
+                    formatter={(val: any) => [`$${Number(val).toFixed(2)}`, 'Daily P&L']}
+                  />
+                  <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
+                    {dailyPnlData.map((entry, idx) => (
+                      <Cell key={`cell-${idx}`} fill={entry.pnl >= 0 ? '#10B981' : '#FB7185'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center text-slate-500 text-xs font-mono">
+                Aucune séance clôturée pour afficher le P&L journalier.
+              </div>
+            )}
           </div>
         </div>
 
@@ -170,26 +226,32 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ trades, userPr
           <h2 className="text-sm font-bold text-slate-100 mb-1">3. Monthly P&L Aggregations</h2>
           <p className="text-[11px] text-slate-400 mb-4">P&L performance across trading months</p>
 
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyPnlData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <XAxis dataKey="month" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#090D14',
-                    borderColor: '#334155',
-                    fontSize: '11px',
-                  }}
-                  formatter={(val: any) => [`$${Number(val).toFixed(2)}`, 'Monthly P&L']}
-                />
-                <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                  {monthlyPnlData.map((entry, idx) => (
-                    <Cell key={`cell-${idx}`} fill={entry.pnl >= 0 ? '#38BDF8' : '#FB7185'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-56 w-full flex items-center justify-center">
+            {monthlyPnlData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyPnlData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="month" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#090D14',
+                      borderColor: '#334155',
+                      fontSize: '11px',
+                    }}
+                    formatter={(val: any) => [`$${Number(val).toFixed(2)}`, 'Monthly P&L']}
+                  />
+                  <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+                    {monthlyPnlData.map((entry, idx) => (
+                      <Cell key={`cell-${idx}`} fill={entry.pnl >= 0 ? '#38BDF8' : '#FB7185'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center text-slate-500 text-xs font-mono">
+                Aucun mois enregistré pour afficher l'agrégation mensuelle.
+              </div>
+            )}
           </div>
         </div>
       </div>

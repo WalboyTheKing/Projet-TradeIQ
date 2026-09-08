@@ -51,6 +51,8 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
           },
         });
         if (!res.ok) return;
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) return;
         const data = await res.json();
         if (isMounted && data.success && data.subscription) {
           setActiveSubData(data.subscription);

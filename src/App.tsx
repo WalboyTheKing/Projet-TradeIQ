@@ -553,7 +553,11 @@ export default function App() {
             )}
 
             {currentTab === 'calendar' && (
-              <CalendarView trades={trades} onDeleteTrade={handleDeleteTrade} />
+              <CalendarView
+                trades={trades}
+                onDeleteTrade={handleDeleteTrade}
+                onOpenAddTrade={() => setIsAddTradeOpen(true)}
+              />
             )}
 
             {currentTab === 'statistics' && (
@@ -561,7 +565,11 @@ export default function App() {
             )}
 
             {currentTab === 'performance' && (
-              <PerformanceView trades={trades} userProfile={activeProfile} />
+              <PerformanceView
+                trades={trades}
+                userProfile={activeProfile}
+                onOpenAddTrade={() => setIsAddTradeOpen(true)}
+              />
             )}
 
             {currentTab === 'strategies' && (

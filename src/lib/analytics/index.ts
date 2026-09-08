@@ -204,6 +204,7 @@ export function calculateDrawdown(trades: Trade[], initialCapital: number = 1000
     maxDrawdownAmount: Number(maxDrawdownAmount.toFixed(2)),
     maxDrawdownPercent: Number(maxDrawdownPercent.toFixed(1)),
     finalEquity: Number(runningEquity.toFixed(2)),
+    peakEquity: Number(peakEquity.toFixed(2)),
   };
 }
 
