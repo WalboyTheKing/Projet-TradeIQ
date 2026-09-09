@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -15,6 +15,7 @@ import {
   Bell,
   CheckCircle2,
   Filter,
+  Radio,
 } from 'lucide-react';
 import {
   CurrencyCode,
@@ -26,6 +27,7 @@ import {
   getEconomicScheduleForWeek,
   getWeekRangeLabel,
   getNextHighImpactEvent,
+  fetchLiveEconomicCalendar,
   CURRENCY_CONFIG,
 } from '../../lib/economicCalendarData';
 
@@ -55,6 +57,30 @@ export const EconomicCalendarView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedTimezone, setSelectedTimezone] = useState<'ET' | 'UTC' | 'CET'>('ET');
   const [activeEventModal, setActiveEventModal] = useState<EconomicEvent | null>(null);
+
+  // Live feed state
+  const [liveEvents, setLiveEvents] = useState<EconomicEvent[]>([]);
+  const [feedSource, setFeedSource] = useState<string>('ForexFactory (Fair Economy Media)');
+  const [isLiveLoading, setIsLiveLoading] = useState<boolean>(false);
+  const [lastRefreshed, setLastRefreshed] = useState<string>('');
+
+  const loadLiveFeed = async () => {
+    setIsLiveLoading(true);
+    try {
+      const data = await fetchLiveEconomicCalendar();
+      setLiveEvents(data.events);
+      setFeedSource(data.source);
+      setLastRefreshed(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) {
+      console.warn('Failed to refresh calendar feed:', e);
+    } finally {
+      setIsLiveLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveFeed();
+  }, []);
 
   // Week navigation
   const handlePrevWeek = () => {
@@ -104,9 +130,10 @@ export const EconomicCalendarView: React.FC = () => {
       currentMonday,
       selectedImpacts,
       selectedCurrencies,
-      searchQuery
+      searchQuery,
+      liveEvents
     );
-  }, [currentMonday, selectedImpacts, selectedCurrencies, searchQuery]);
+  }, [currentMonday, selectedImpacts, selectedCurrencies, searchQuery, liveEvents]);
 
   const weekRangeLabel = useMemo(() => {
     return getWeekRangeLabel(currentMonday);
@@ -163,26 +190,51 @@ export const EconomicCalendarView: React.FC = () => {
           </div>
         </div>
 
-        {/* Timezone Selector */}
-        <div className="flex items-center gap-2 text-xs font-mono self-start md:self-auto">
-          <span className="text-slate-400 flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" />
-            Timezone:
-          </span>
-          <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
-            {(['ET', 'UTC', 'CET'] as const).map((tz) => (
-              <button
-                key={tz}
-                onClick={() => setSelectedTimezone(tz)}
-                className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
-                  selectedTimezone === tz
-                    ? 'bg-slate-800 text-emerald-400'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {tz}
-              </button>
-            ))}
+        {/* Live Feed Status & Timezone Selector */}
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono self-start md:self-auto">
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Source: <strong className="text-slate-200">{feedSource}</strong>
+            </span>
+            {lastRefreshed && (
+              <span className="hidden sm:inline text-[10px] text-slate-500">
+                ({lastRefreshed})
+              </span>
+            )}
+            <button
+              onClick={loadLiveFeed}
+              disabled={isLiveLoading}
+              title="Refresh live macro feed"
+              className="p-0.5 hover:text-emerald-400 transition-colors text-slate-400 disabled:opacity-50"
+            >
+              <RotateCcw className={`w-3 h-3 ${isLiveLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              Timezone:
+            </span>
+            <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
+              {(['ET', 'UTC', 'CET'] as const).map((tz) => (
+                <button
+                  key={tz}
+                  onClick={() => setSelectedTimezone(tz)}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                    selectedTimezone === tz
+                      ? 'bg-slate-800 text-emerald-400'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {tz}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

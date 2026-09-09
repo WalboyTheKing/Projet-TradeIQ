@@ -45,6 +45,31 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// Live Economic Calendar Proxy from ForexFactory (Fair Economy Media live feed)
+app.get('/api/economic-calendar', async (req: Request, res: Response) => {
+  try {
+    const response = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; TradeIQ/1.0)',
+      },
+    });
+    if (!response.ok) {
+      return res.status(502).json({ error: 'Failed to fetch live economic calendar feed' });
+    }
+    const data = await response.json();
+    res.setHeader('Cache-Control', 'public, max-age=900'); // 15 min cache
+    res.json({
+      success: true,
+      source: 'ForexFactory (Fair Economy Media)',
+      updatedAt: new Date().toISOString(),
+      events: data,
+    });
+  } catch (error: any) {
+    console.error('Economic calendar proxy error:', error);
+    res.status(500).json({ error: 'Internal economic calendar error' });
+  }
+});
+
 // Supabase Proxy to securely handle requests without "Forbidden use of secret API key in browser"
 app.all('/api/supabase-proxy/*', async (req: Request, res: Response) => {
   try {

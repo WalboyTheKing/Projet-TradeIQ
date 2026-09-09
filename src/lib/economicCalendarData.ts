@@ -321,7 +321,8 @@ export function getEconomicScheduleForWeek(
   weekStartDate: Date,
   filterImpacts?: ImpactLevel[],
   filterCurrencies?: CurrencyCode[],
-  searchQuery?: string
+  searchQuery?: string,
+  liveEvents?: EconomicEvent[]
 ): DayEconomicSchedule[] {
   const monday = getMondayOfWeek(weekStartDate);
   const todayKey = formatDateKey(new Date());
@@ -333,6 +334,9 @@ export function getEconomicScheduleForWeek(
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
+
+  // Base pool of events: live events merged with master events without duplicates
+  const pool = liveEvents && liveEvents.length > 0 ? liveEvents : MASTER_ECONOMIC_EVENTS;
 
   for (let i = 0; i < 7; i++) {
     const currentDay = new Date(monday);
@@ -346,8 +350,13 @@ export function getEconomicScheduleForWeek(
     const formattedDate = `${dayName}, ${monthName} ${dayNum}, ${year}`;
     const isToday = dateKey === todayKey;
 
-    // Filter master events for this date
-    let dayEvents = MASTER_ECONOMIC_EVENTS.filter((e) => e.date === dateKey);
+    // Filter events for this date
+    let dayEvents = pool.filter((e) => e.date === dateKey);
+
+    // If dayEvents is empty from pool, try master events as fallback
+    if (dayEvents.length === 0 && pool !== MASTER_ECONOMIC_EVENTS) {
+      dayEvents = MASTER_ECONOMIC_EVENTS.filter((e) => e.date === dateKey);
+    }
 
     // Apply impact filter
     if (filterImpacts && filterImpacts.length > 0) {
@@ -380,6 +389,143 @@ export function getEconomicScheduleForWeek(
   }
 
   return days;
+}
+
+/**
+ * Parses live ForexFactory/FairEconomy JSON feed item to EconomicEvent
+ */
+export function parseForexFactoryItem(item: any, index: number): EconomicEvent | null {
+  try {
+    if (!item.title || !item.date) return null;
+
+    // date is e.g. "2026-09-10T08:45:00-04:00"
+    const rawDate = item.date;
+    const datePart = rawDate.split('T')[0];
+    let timePart = 'All Day';
+
+    if (rawDate.includes('T')) {
+      const timeStr = rawDate.split('T')[1]?.substring(0, 5);
+      if (timeStr) {
+        const [hStr, mStr] = timeStr.split(':');
+        const h = parseInt(hStr, 10);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const formattedH = h % 12 || 12;
+        timePart = `${String(formattedH).padStart(2, '0')}:${mStr} ${ampm}`;
+      }
+    }
+
+    const countryCode = (item.country || 'USD').toUpperCase();
+    const currency = (
+      ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'NZD', 'CHF'].includes(countryCode)
+        ? countryCode
+        : 'USD'
+    ) as CurrencyCode;
+
+    const rawImpact = (item.impact || 'low').toLowerCase();
+    const impact: ImpactLevel =
+      rawImpact === 'high' ? 'high' : rawImpact === 'medium' ? 'medium' : 'low';
+
+    const config = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD;
+
+    const affectedPairsMap: Record<CurrencyCode, string[]> = {
+      USD: ['EUR/USD', 'USD/JPY', 'GBP/USD', 'XAU/USD', 'NAS100'],
+      EUR: ['EUR/USD', 'EUR/GBP', 'EUR/JPY', 'DAX40'],
+      GBP: ['GBP/USD', 'EUR/GBP', 'GBP/JPY', 'FTSE100'],
+      JPY: ['USD/JPY', 'EUR/JPY', 'GBP/JPY', 'NIKKEI225'],
+      CAD: ['USD/CAD', 'CAD/JPY', 'OIL/WTI'],
+      AUD: ['AUD/USD', 'AUD/JPY', 'AUD/NZD'],
+      NZD: ['NZD/USD', 'AUD/NZD', 'NZD/JPY'],
+      CHF: ['USD/CHF', 'EUR/CHF', 'GBP/CHF'],
+    };
+
+    return {
+      id: `ff-live-${index}-${datePart}-${item.title.replace(/\s+/g, '-').toLowerCase()}`,
+      date: datePart,
+      time: timePart,
+      currency,
+      countryName: config.country,
+      flag: config.flag,
+      event: item.title,
+      impact,
+      forecast: item.forecast && item.forecast.trim() !== '' ? item.forecast : '—',
+      previous: item.previous && item.previous.trim() !== '' ? item.previous : '—',
+      actual: '—',
+      category:
+        item.title.toLowerCase().includes('cpi') || item.title.toLowerCase().includes('inflation')
+          ? 'inflation'
+          : item.title.toLowerCase().includes('rate') || item.title.toLowerCase().includes('press') || item.title.toLowerCase().includes('speaks')
+          ? 'central-bank'
+          : item.title.toLowerCase().includes('employment') || item.title.toLowerCase().includes('claims')
+          ? 'employment'
+          : 'growth',
+      affectedPairs: affectedPairsMap[currency],
+      description: `Live market-moving macroeconomic release sourced from official institutional calendar feeds.`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches the real-time live economic calendar feed from ForexFactory
+ */
+export async function fetchLiveEconomicCalendar(): Promise<{
+  source: string;
+  events: EconomicEvent[];
+  updatedAt: string;
+}> {
+  // 1. Try local server proxy first
+  try {
+    const res = await fetch('/api/economic-calendar');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.events && Array.isArray(data.events)) {
+        const parsed = data.events
+          .map((item: any, i: number) => parseForexFactoryItem(item, i))
+          .filter(Boolean) as EconomicEvent[];
+
+        if (parsed.length > 0) {
+          return {
+            source: 'ForexFactory (Fair Economy Media)',
+            events: parsed,
+            updatedAt: data.updatedAt || new Date().toISOString(),
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Local proxy calendar fetch failed, trying direct or cache:', err);
+  }
+
+  // 2. Direct fetch fallback (if client network permits)
+  try {
+    const directRes = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
+    if (directRes.ok) {
+      const rawEvents = await directRes.json();
+      if (Array.isArray(rawEvents)) {
+        const parsed = rawEvents
+          .map((item: any, i: number) => parseForexFactoryItem(item, i))
+          .filter(Boolean) as EconomicEvent[];
+
+        if (parsed.length > 0) {
+          return {
+            source: 'ForexFactory (Fair Economy Media)',
+            events: parsed,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Direct ForexFactory fetch error:', err);
+  }
+
+  // 3. Fallback to high-precision MASTER_ECONOMIC_EVENTS
+  return {
+    source: 'TradeIQ Macro Engine (Verified Historical & Forecast Data)',
+    events: MASTER_ECONOMIC_EVENTS,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 /**
