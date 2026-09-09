@@ -19,8 +19,8 @@ const STORAGE_KEYS = {
 
 const DEFAULT_PROFILE: UserProfile = {
   id: '',
-  name: '',
-  email: '',
+  name: 'Waliou Labouda',
+  email: 'walioulabouda2@gmail.com',
   currency: 'USD',
   currencySymbol: '$',
   timezone: 'UTC',
@@ -29,7 +29,7 @@ const DEFAULT_PROFILE: UserProfile = {
   initialCapital: 10000,
   plan: 'free',
   favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
-  onboardingCompleted: false,
+  onboardingCompleted: true,
 };
 
 class StorageService {

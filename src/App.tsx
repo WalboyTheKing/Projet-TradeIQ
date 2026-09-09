@@ -25,6 +25,16 @@ import { ImportView } from './components/import/ImportView';
 import { ReportsView } from './components/reports/ReportsView';
 import { BillingView } from './components/billing/BillingView';
 import { SettingsView } from './components/settings/SettingsView';
+import { SupportView } from './components/support/SupportView';
+import { TradeManagerView } from './components/trade-manager/TradeManagerView';
+import { CatalystsView } from './components/catalysts/CatalystsView';
+import { ConnectAccountsView } from './components/connect/ConnectAccountsView';
+import { SimulatorView } from './components/simulator/SimulatorView';
+import { PaperTradingView } from './components/paper-trading/PaperTradingView';
+import { StressTestView } from './components/stress-test/StressTestView';
+import { LearningView } from './components/learning/LearningView';
+import { CreatorView } from './components/creator/CreatorView';
+import { AffiliateView } from './components/affiliate/AffiliateView';
 
 // Auth Pages
 import { LoginPage } from './components/auth/LoginPage';
@@ -99,11 +109,11 @@ export default function App() {
         authProfile?.name ||
         user.user_metadata?.name ||
         user.user_metadata?.full_name ||
-        (user.email ? user.email.split('@')[0] : 'Trader');
+        (user.email ? user.email.split('@')[0] : 'Waliou Labouda');
       return {
         id: user.id,
         name: derivedName,
-        email: user.email || authProfile?.email || '',
+        email: user.email || authProfile?.email || 'walioulabouda2@gmail.com',
         currency: authProfile?.currency || 'USD',
         currencySymbol: authProfile?.currencySymbol || '$',
         timezone: authProfile?.timezone || 'UTC',
@@ -127,8 +137,8 @@ export default function App() {
     if (isDemo) {
       return {
         id: 'demo-session',
-        name: 'Compte Démo',
-        email: 'demo@tradeiq.internal',
+        name: 'Waliou Labouda',
+        email: 'walioulabouda2@gmail.com',
         currency: 'USD',
         currencySymbol: '$',
         timezone: 'UTC',
@@ -564,6 +574,68 @@ export default function App() {
 
             {currentTab === 'economic-calendar' && (
               <EconomicCalendarView />
+            )}
+
+            {currentTab === 'trade-manager' && (
+              <TradeManagerView
+                trades={trades}
+                userProfile={activeProfile}
+                onOpenAddTrade={() => setIsAddTradeOpen(true)}
+              />
+            )}
+
+            {currentTab === 'catalysts' && (
+              <CatalystsView />
+            )}
+
+            {currentTab === 'connect-accounts' && (
+              <ConnectAccountsView
+                userProfile={activeProfile}
+                onOpenImport={() => setCurrentTab('import')}
+              />
+            )}
+
+            {currentTab === 'simulator' && (
+              <SimulatorView />
+            )}
+
+            {currentTab === 'paper-trading' && (
+              <PaperTradingView />
+            )}
+
+            {(currentTab === 'ai-analysis' || currentTab === 'ai-review' || currentTab === 'trading-feedback') && (
+              <AiAnalysisView trades={trades} userProfile={activeProfile} />
+            )}
+
+            {currentTab === 'stress-test' && (
+              <StressTestView trades={trades} />
+            )}
+
+            {currentTab === 'learning' && (
+              <LearningView />
+            )}
+
+            {(currentTab === 'reports' || currentTab === 'trade-history') && (
+              <ReportsView trades={trades} userProfile={activeProfile} />
+            )}
+
+            {(currentTab === 'billing' || currentTab === 'plans') && (
+              <BillingView
+                userProfile={activeProfile}
+                onUpdateProfile={handleUpdateProfile}
+              />
+            )}
+
+            {currentTab === 'creator' && (
+              <CreatorView userProfile={activeProfile} />
+            )}
+
+            {currentTab === 'affiliate' && (
+              <AffiliateView userProfile={activeProfile} />
+            )}
+
+            {currentTab === 'support' && (
+              <SupportView userProfile={activeProfile} />
             )}
 
             {currentTab === 'statistics' && (

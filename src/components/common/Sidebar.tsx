@@ -2,42 +2,58 @@ import React from 'react';
 import {
   LayoutDashboard,
   Search,
-  BookOpen,
-  Calendar,
-  BarChart2,
-  TrendingUp,
-  Target,
-  Globe2,
-  ShieldCheck,
-  FileText,
-  Settings,
+  SlidersHorizontal,
+  CalendarDays,
+  Flame,
+  Link2,
+  PlayCircle,
+  WalletCards,
   Sparkles,
+  BookOpen,
+  Activity,
+  Target,
+  GraduationCap,
+  History,
+  Crown,
+  Users,
+  Percent,
+  HelpCircle,
   ArrowUpRight,
   LogOut,
-  HelpCircle,
-  Home,
-  Coins,
-  CalendarDays
+  Home
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
 import { UserProfile } from '../../types/trade';
 
 export type NavTab = 
   | 'dashboard'
-  | 'chart-analysis'
   | 'trade-analysis'
-  | 'journal'
-  | 'calendar'
+  | 'chart-analysis'
+  | 'trade-manager'
   | 'economic-calendar'
+  | 'catalysts'
+  | 'connect-accounts'
+  | 'simulator'
+  | 'paper-trading'
+  | 'trading-feedback'
+  | 'ai-review'
+  | 'journal'
+  | 'stress-test'
+  | 'strategies'
+  | 'learning'
+  | 'trade-history'
+  | 'plans'
+  | 'billing'
+  | 'creator'
+  | 'affiliate'
+  | 'support'
+  | 'settings'
+  | 'calendar'
   | 'statistics'
   | 'performance'
-  | 'strategies'
   | 'markets'
   | 'risk'
-  | 'ai-review'
-  | 'reports'
-  | 'billing'
-  | 'settings';
+  | 'reports';
 
 interface SidebarProps {
   activeTab: string;
@@ -51,6 +67,16 @@ interface SidebarProps {
   isOpen?: boolean;
   onCloseMobile?: () => void;
   onClose?: () => void;
+}
+
+interface NavGroup {
+  family: string;
+  items: {
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: string;
+  }[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -68,8 +94,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const profile: UserProfile = {
     id: userProfile?.id || '',
-    name: userProfile?.name || 'Trader',
-    email: userProfile?.email || '',
+    name: userProfile?.name && userProfile.name !== 'Trader' ? userProfile.name : 'Waliou Labouda',
+    email: userProfile?.email || 'walioulabouda2@gmail.com',
     currency: userProfile?.currency || 'USD',
     currencySymbol: userProfile?.currencySymbol || '$',
     timezone: userProfile?.timezone || 'UTC',
@@ -84,23 +110,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const effectiveMobileOpen = isOpen || isMobileOpen;
 
-  const mainNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'chart-analysis', label: 'AI Chart Analysis', icon: Sparkles, badge: 'AI' },
-    { id: 'trade-analysis', label: 'Trade Explorer', icon: Search },
-    { id: 'journal', label: 'Journal', icon: BookOpen },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'economic-calendar', label: 'Economic Calendar', icon: CalendarDays },
-    { id: 'statistics', label: 'Statistics', icon: BarChart2 },
-    { id: 'performance', label: 'Performance', icon: TrendingUp },
-    { id: 'strategies', label: 'Strategies', icon: Target },
-    { id: 'markets', label: 'Markets', icon: Globe2 },
-    { id: 'risk', label: 'Risk Analysis', icon: ShieldCheck },
-    { id: 'ai-review', label: 'AI Review', icon: Sparkles, badge: 'AI' },
-    { id: 'reports', label: 'Reports', icon: FileText },
-    { id: 'billing', label: 'Billing & USDT', icon: Coins },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ] as const;
+  // Family groups exactly as requested:
+  const navGroups: NavGroup[] = [
+    {
+      family: 'Trade',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'trade-analysis', label: 'Trade Analysis', icon: Search },
+        { id: 'trade-manager', label: 'Trade Manager', icon: SlidersHorizontal },
+        { id: 'economic-calendar', label: 'Economic Calendar', icon: CalendarDays },
+        { id: 'catalysts', label: 'Catalysts', icon: Flame },
+        { id: 'connect-accounts', label: 'Connect Accounts', icon: Link2 },
+        { id: 'simulator', label: 'Simulator', icon: PlayCircle },
+      ],
+    },
+    {
+      family: 'Pro',
+      items: [
+        { id: 'paper-trading', label: 'Paper Trading', icon: WalletCards, badge: 'PRO' },
+        { id: 'trading-feedback', label: 'Trading Feedback', icon: Sparkles, badge: 'AI' },
+        { id: 'journal', label: 'Trade Journal', icon: BookOpen },
+        { id: 'stress-test', label: 'Stress Test', icon: Activity },
+      ],
+    },
+    {
+      family: 'Beta',
+      items: [
+        { id: 'strategies', label: 'Strategy Builder', icon: Target, badge: 'BETA' },
+      ],
+    },
+    {
+      family: 'Learn',
+      items: [
+        { id: 'learning', label: 'Learning', icon: GraduationCap },
+      ],
+    },
+    {
+      family: 'Journal',
+      items: [
+        { id: 'trade-history', label: 'Trade History', icon: History },
+      ],
+    },
+    {
+      family: 'Account',
+      items: [
+        { id: 'billing', label: 'Plans', icon: Crown },
+        { id: 'creator', label: 'Become a Creator', icon: Users },
+        { id: 'affiliate', label: 'Affiliate Program', icon: Percent },
+        { id: 'support', label: 'Support', icon: HelpCircle },
+      ],
+    },
+  ];
 
   const handleItemClick = (id: string) => {
     if (onTabChange) onTabChange(id);
@@ -139,13 +199,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="text-sm font-bold tracking-wider text-slate-100 font-mono">
                 {APP_CONFIG.name}
               </div>
-              <div className="text-[10px] text-slate-400">Professional SaaS</div>
+              <div className="text-[10px] text-slate-400 font-mono">Institutional Terminal</div>
             </div>
           </div>
           {onNavigateHome && (
             <button
               onClick={onNavigateHome}
-              className="text-slate-400 hover:text-slate-200 p-1 rounded-md hover:bg-slate-800/50"
+              className="text-slate-400 hover:text-slate-200 p-1 rounded-md hover:bg-slate-800/50 transition-colors"
               title="Return to Landing Page"
             >
               <Home className="w-4 h-4" />
@@ -153,86 +213,105 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Navigation items */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 scrollbar-thin">
-          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Terminal Views
-          </div>
+        {/* Navigation Families */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin">
+          {navGroups.map((group) => (
+            <div key={group.family} className="space-y-1">
+              {/* Category Header */}
+              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-slate-400 font-mono">
+                {group.family}
+              </div>
 
-          {mainNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              activeTab === item.id ||
-              (item.id === 'risk' && activeTab === 'psychology') ||
-              (item.id === 'ai-review' && activeTab === 'ai-analysis');
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleItemClick(item.id)}
-                className={`group flex items-center justify-between w-full px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Icon
-                    className={`w-4 h-4 transition-colors ${
-                      isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-300'
-                    }`}
-                  />
-                  <span>{item.label}</span>
-                </div>
+              {/* Items in Family */}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive =
+                    activeTab === item.id ||
+                    (item.id === 'trading-feedback' && (activeTab === 'ai-review' || activeTab === 'ai-analysis')) ||
+                    (item.id === 'billing' && activeTab === 'plans') ||
+                    (item.id === 'connect-accounts' && activeTab === 'import') ||
+                    (item.id === 'trade-history' && activeTab === 'reports');
 
-                {'badge' in item && item.badge && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleItemClick(item.id)}
+                      className={`group flex items-center justify-between w-full px-3 py-2 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon
+                          className={`w-4 h-4 transition-colors ${
+                            isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-300'
+                          }`}
+                        />
+                        <span>{item.label}</span>
+                      </div>
+
+                      {item.badge && (
+                        <span
+                          className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                            item.badge === 'PRO'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : item.badge === 'AI'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Bottom Subscription & Profile Section */}
+        {/* Bottom Subscription & WL Profile Section */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-900/40 space-y-2.5">
           {/* Plan card */}
-          <div className="p-3 rounded-lg bg-slate-900 border border-slate-800/90 flex flex-col gap-2">
+          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800/90 flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-medium">Subscription</span>
-              <span className="font-bold text-amber-400 uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+              <span className="font-bold text-amber-400 uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-mono">
                 {profile.plan}
               </span>
             </div>
 
-            <div className="text-[11px] text-slate-400">
+            <div className="text-[10px] text-slate-400">
               {profile.plan === 'free'
-                ? '50 trades limit per account'
+                ? '50 trades limit • Free Tier'
                 : 'Unlimited trades & AI features enabled'}
             </div>
 
             {onOpenUpgrade && (
               <button
                 onClick={onOpenUpgrade}
-                className="flex items-center justify-center gap-1 w-full py-1.5 text-xs font-semibold text-slate-100 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 rounded-md transition-colors"
+                className="flex items-center justify-center gap-1 w-full py-1 text-xs font-semibold text-slate-100 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 rounded-md transition-colors cursor-pointer"
               >
-                <span>Upgrade / Manage</span>
-                <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                <span>Upgrade / Plans</span>
+                <ArrowUpRight className="w-3 h-3 text-slate-400" />
               </button>
             )}
           </div>
 
-          {/* User profile row */}
-          <div className="flex items-center justify-between px-2 pt-1">
+          {/* User profile row: WL / Waliou Labouda / walioulabouda2@gmail.com */}
+          <div className="flex items-center justify-between px-1 pt-1">
             <div className="flex items-center gap-2 truncate">
-              <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-semibold text-xs shrink-0">
-                {profile.name?.charAt(0) || 'U'}
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 border border-emerald-400/30 flex items-center justify-center text-slate-950 font-bold text-xs shrink-0 shadow-sm font-mono">
+                WL
               </div>
               <div className="truncate">
-                <div className="text-xs font-semibold text-slate-200 truncate">
+                <div className="text-xs font-bold text-slate-200 truncate">
                   {profile.name}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate">
+                <div className="text-[10px] text-slate-400 truncate font-mono">
                   {profile.email}
                 </div>
               </div>

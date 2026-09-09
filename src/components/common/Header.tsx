@@ -45,8 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const profile: UserProfile = {
     id: userProfile?.id || '',
-    name: userProfile?.name || 'Trader',
-    email: userProfile?.email || '',
+    name: userProfile?.name && userProfile.name !== 'Trader' ? userProfile.name : 'Waliou Labouda',
+    email: userProfile?.email || 'walioulabouda2@gmail.com',
     currency: userProfile?.currency || 'USD',
     currencySymbol: userProfile?.currencySymbol || '$',
     timezone: userProfile?.timezone || 'UTC',
@@ -166,8 +166,8 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         <div className="hidden lg:flex items-center gap-2.5 pl-2 border-l border-slate-800 text-xs">
-          <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-semibold text-xs">
-            {profile.name?.charAt(0) || 'U'}
+          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 border border-emerald-400/30 flex items-center justify-center text-slate-950 font-bold text-xs">
+            {profile.name === 'Waliou Labouda' ? 'WL' : profile.name?.charAt(0) || 'U'}
           </div>
           <span className="text-slate-300 font-medium">{profile.name}</span>
           {onSignOut && (
