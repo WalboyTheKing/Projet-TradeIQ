@@ -278,19 +278,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Plan card */}
           <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800/90 flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium">Subscription</span>
-              <span className="font-bold text-amber-400 uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-mono">
-                {profile.plan}
-              </span>
+              <span className="text-slate-400 font-medium">Access Status</span>
+              {userProfile?.role === 'admin' ? (
+                <span className="font-bold text-purple-300 uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-500/30 font-mono">
+                  ADMIN
+                </span>
+              ) : (
+                <span className="font-bold text-amber-400 uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-mono">
+                  {profile.plan}
+                </span>
+              )}
             </div>
 
             <div className="text-[10px] text-slate-400">
-              {profile.plan === 'free'
+              {userProfile?.role === 'admin'
+                ? 'Full Access • All Features & Quotas Unlocked'
+                : profile.plan === 'free'
                 ? '50 trades limit • Free Tier'
                 : 'Unlimited trades & AI features enabled'}
             </div>
 
-            {onOpenUpgrade && (
+            {userProfile?.role !== 'admin' && onOpenUpgrade && (
               <button
                 onClick={onOpenUpgrade}
                 className="flex items-center justify-center gap-1 w-full py-1 text-xs font-semibold text-slate-100 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 rounded-md transition-colors cursor-pointer"
@@ -305,11 +313,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between px-1 pt-1">
             <div className="flex items-center gap-2 truncate">
               <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 border border-emerald-400/30 flex items-center justify-center text-slate-950 font-bold text-xs shrink-0 shadow-sm font-mono">
-                WL
+                {profile.name
+                  ? profile.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()
+                  : 'WL'}
               </div>
               <div className="truncate">
-                <div className="text-xs font-bold text-slate-200 truncate">
-                  {profile.name}
+                <div className="text-xs font-bold text-slate-200 truncate flex items-center gap-1.5">
+                  <span className="truncate">{profile.name}</span>
+                  {userProfile?.role === 'admin' && (
+                    <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1 py-0.2 rounded font-mono font-bold shrink-0">
+                      Admin
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-slate-400 truncate font-mono">
                   {profile.email}

@@ -293,12 +293,40 @@ app.get('/api/tests/run', async (req: Request, res: Response) => {
   }
 });
 
-// AI Trade Review Endpoint
+// AI Trade Review Endpoint (PRO / PREMIUM Feature, Admin Bypassed)
 app.post('/api/ai/trade-review', async (req: Request, res: Response) => {
   const { trade } = req.body;
+  const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
 
   if (!trade) {
     return res.status(400).json({ error: 'Trade payload required' });
+  }
+
+  // Check authorization & quotas
+  try {
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+
+    const hasAccess = await dbService.checkFeatureAccess(userId, 'ai-trade-review');
+    if (!hasAccess) {
+      return res.status(403).json({
+        error: 'AI Trade Review requires a PRO or PREMIUM plan. Please upgrade to unlock.',
+        requiredTier: 'pro',
+      });
+    }
+
+    const quota = await dbService.checkAndIncrementAiQuota(userId, 'trade_review');
+    if (!quota.allowed) {
+      return res.status(403).json({
+        error: quota.error,
+        plan: quota.plan,
+        currentCount: quota.currentCount,
+        limit: quota.limit,
+      });
+    }
+  } catch (authErr: any) {
+    console.warn('Authorization check warning in /api/ai/trade-review:', authErr.message);
   }
 
   const disclaimer = 'AI analysis is informational and based strictly on historical trade records. It does not constitute financial advice or guarantees of profit.';
@@ -390,10 +418,28 @@ Do NOT promise future profit. Return purely JSON without markdown backticks.`;
   });
 });
 
-// AI Weekly Review Endpoint
+// AI Weekly Review Endpoint (PRO / PREMIUM Feature, Admin Bypassed)
 app.post('/api/ai/weekly-review', async (req: Request, res: Response) => {
   const { trades, periodName } = req.body;
+  const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
   const tradeList = Array.isArray(trades) ? trades : [];
+
+  // Check authorization
+  try {
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+
+    const hasAccess = await dbService.checkFeatureAccess(userId, 'ai-weekly-review');
+    if (!hasAccess) {
+      return res.status(403).json({
+        error: 'AI Weekly Review requires a PRO or PREMIUM plan. Please upgrade to unlock.',
+        requiredTier: 'pro',
+      });
+    }
+  } catch (authErr: any) {
+    console.warn('Authorization check warning in /api/ai/weekly-review:', authErr.message);
+  }
 
   const disclaimer = 'AI analysis is informational and based strictly on historical trade records. It does not constitute financial advice or guarantees of profit.';
 

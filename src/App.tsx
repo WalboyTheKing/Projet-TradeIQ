@@ -114,6 +114,7 @@ export default function App() {
         id: user.id,
         name: derivedName,
         email: user.email || authProfile?.email || 'walioulabouda2@gmail.com',
+        role: authProfile?.role || userProfile.role || 'user',
         currency: authProfile?.currency || 'USD',
         currencySymbol: authProfile?.currencySymbol || '$',
         timezone: authProfile?.timezone || 'UTC',
@@ -139,6 +140,7 @@ export default function App() {
         id: 'demo-session',
         name: 'Waliou Labouda',
         email: 'walioulabouda2@gmail.com',
+        role: userProfile.role || 'user',
         currency: 'USD',
         currencySymbol: '$',
         timezone: 'UTC',
@@ -216,8 +218,18 @@ export default function App() {
     setAuthRoute(route);
   };
 
-  // Handlers using tradeService with strict real/demo branching
+  const [tradeLimitError, setTradeLimitError] = useState<string | null>(null);
+
+  // Handlers using tradeService with strict real/demo branching & Free tier limit
   const handleSaveTrade = async (tradeData: Omit<Trade, 'id' | 'created_at'>) => {
+    const isAdmin = activeProfile.role === 'admin';
+    const isFree = (activeProfile.plan || 'free') === 'free';
+    if (!isAdmin && isFree && trades.length >= 50) {
+      setTradeLimitError('You have reached the Free Tier limit of 50 trades. Please upgrade to Pro or Premium for unlimited trades.');
+      setCurrentTab('billing');
+      return;
+    }
+    setTradeLimitError(null);
     await tradeService.addTrade(user ? user.id : null, isDemo, tradeData);
     await reloadData();
   };
@@ -531,7 +543,21 @@ export default function App() {
 
         {/* Dynamic View Canvas */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl mx-auto space-y-4">
+            {tradeLimitError && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="text-xs font-medium">{tradeLimitError}</span>
+                </div>
+                <button
+                  onClick={() => setTradeLimitError(null)}
+                  className="text-xs text-amber-400 hover:text-amber-200 font-semibold cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
             {currentTab === 'dashboard' && (
               <DashboardOverview
                 trades={trades}

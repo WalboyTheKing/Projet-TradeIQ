@@ -30,6 +30,12 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE user_role AS ENUM ('user', 'admin');
+  END IF;
+END $$;
+
+DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subscription_status') THEN
     CREATE TYPE subscription_status AS ENUM ('active', 'past_due', 'expired', 'canceled');
   END IF;
@@ -61,7 +67,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   name TEXT,
-  plan subscription_plan DEFAULT 'free' NOT NULL,
+  role user_role DEFAULT 'user'::user_role NOT NULL,
+  plan subscription_plan DEFAULT 'free'::subscription_plan NOT NULL,
   currency TEXT DEFAULT 'USD' NOT NULL,
   currency_symbol TEXT DEFAULT '$' NOT NULL,
   timezone TEXT DEFAULT 'UTC' NOT NULL,
@@ -79,23 +86,25 @@ CREATE TRIGGER trg_users_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.set_updated_at_timestamp();
 
--- 3b. Security Trigger: Prevent client-side modification of sensitive plan & tier fields
-CREATE OR REPLACE FUNCTION public.protect_user_plan()
+-- 3b. Security Trigger: Prevent client-side modification of sensitive role & plan fields
+CREATE OR REPLACE FUNCTION public.protect_user_role_and_plan()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- If caller is authenticated user (client API) and NOT database superuser/service_role, freeze plan
+  -- If caller is authenticated user (client API) and NOT database superuser/service_role, freeze plan and role
   IF current_user != 'service_role' AND (auth.role() = 'authenticated' OR auth.role() = 'anon') THEN
     NEW.plan := OLD.plan;
+    NEW.role := OLD.role;
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS trg_protect_user_plan ON public.users;
-CREATE TRIGGER trg_protect_user_plan
+DROP TRIGGER IF EXISTS trg_protect_user_role_and_plan ON public.users;
+CREATE TRIGGER trg_protect_user_role_and_plan
   BEFORE UPDATE ON public.users
   FOR EACH ROW
-  EXECUTE FUNCTION public.protect_user_plan();
+  EXECUTE FUNCTION public.protect_user_role_and_plan();
 
 -- 4. Strategies Table
 CREATE TABLE IF NOT EXISTS public.strategies (
@@ -307,48 +316,62 @@ SET search_path = public
 AS $$
 DECLARE
   v_plan subscription_plan;
+  v_role user_role;
   v_limit INTEGER;
   v_month TEXT;
   v_current_count INTEGER;
 BEGIN
-  -- 1. Fetch user's current plan
-  SELECT plan INTO v_plan FROM public.users WHERE id = p_user_id;
+  -- 1. Fetch user's current plan and role
+  SELECT plan, role INTO v_plan, v_role FROM public.users WHERE id = p_user_id;
   IF NOT FOUND THEN
     v_plan := 'free'::subscription_plan;
+    v_role := 'user'::user_role;
   END IF;
 
-  -- 2. Determine quota limit based on plan & feature
+  -- 2. If Admin, grant unlimited access without blocking
+  IF v_role = 'admin' THEN
+    RETURN jsonb_build_object(
+      'allowed', true,
+      'current_count', 0,
+      'limit', 999999,
+      'plan', v_plan,
+      'role', 'admin',
+      'unlimited', true
+    );
+  END IF;
+
+  -- 3. Determine quota limit based on official tiers
   IF p_feature = 'chart_analysis' THEN
     IF v_plan = 'premium' THEN
-      v_limit := 999999; -- Unlimited
-    ELSIF v_plan = 'pro' THEN
       v_limit := 100;
+    ELSIF v_plan = 'pro' THEN
+      v_limit := 30;
     ELSE
-      v_limit := 5; -- Free tier
+      v_limit := 3; -- Free tier: 3 / month
     END IF;
   ELSE
     IF v_plan = 'premium' THEN
-      v_limit := 999999;
+      v_limit := 200;
     ELSIF v_plan = 'pro' THEN
       v_limit := 50;
     ELSE
-      v_limit := 3;
+      v_limit := 5;
     END IF;
   END IF;
 
   v_month := to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM');
 
-  -- 3. Upsert into monthly quota table atomically
+  -- 4. Upsert into monthly quota table atomically
   INSERT INTO public.ai_monthly_quotas (user_id, year_month, chart_analysis_count, review_count)
   VALUES (
     p_user_id,
     v_month,
-    CASE WHEN p_feature = 'chart_analysis' THEN 0 ELSE 0 END,
-    CASE WHEN p_feature = 'chart_analysis' THEN 0 ELSE 0 END
+    0,
+    0
   )
   ON CONFLICT (user_id, year_month) DO NOTHING;
 
-  -- 4. Check current usage
+  -- 5. Check current usage
   IF p_feature = 'chart_analysis' THEN
     SELECT chart_analysis_count INTO v_current_count
     FROM public.ai_monthly_quotas
@@ -360,6 +383,7 @@ BEGIN
         'current_count', v_current_count,
         'limit', v_limit,
         'plan', v_plan,
+        'role', v_role,
         'error', 'Monthly chart analysis quota reached'
       );
     END IF;
@@ -380,6 +404,7 @@ BEGIN
         'current_count', v_current_count,
         'limit', v_limit,
         'plan', v_plan,
+        'role', v_role,
         'error', 'Monthly AI review quota reached'
       );
     END IF;
@@ -394,7 +419,8 @@ BEGIN
     'allowed', true,
     'current_count', v_current_count,
     'limit', v_limit,
-    'plan', v_plan
+    'plan', v_plan,
+    'role', v_role
   );
 END;
 $$;
@@ -422,6 +448,7 @@ BEGIN
     id,
     email,
     name,
+    role,
     plan,
     currency,
     currency_symbol,
@@ -434,6 +461,7 @@ BEGIN
     NEW.id,
     NEW.email,
     v_name,
+    'user',
     'free',
     'USD',
     '$',

@@ -7,7 +7,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { CryptoPaymentSession, PaymentStatus } from '../lib/payments/types';
-import { SubscriptionPlan, BillingInterval, PRICING_PLANS } from '../lib/payments/pricing';
+import { SubscriptionPlan, BillingInterval, PRICING_PLANS, UserRole, FeatureId, hasFeatureAccess } from '../lib/payments/pricing';
 
 export interface UserSubscription {
   id: string;
@@ -19,6 +19,13 @@ export interface UserSubscription {
   provider: string;
   providerPaymentId?: string;
   paymentId?: string;
+}
+
+export interface UserAccountData {
+  userId: string;
+  role: UserRole;
+  plan: SubscriptionPlan;
+  email?: string;
 }
 
 export interface PaymentEventRecord {
@@ -331,14 +338,63 @@ export class DatabaseService {
   }
 
   /**
+   * Retrieves persistent user account metadata (role, plan, email)
+   * Safely considers ADMIN_USER_ID or ADMIN_EMAIL server-side environment variables.
+   */
+  async getUserAccount(userId: string): Promise<UserAccountData> {
+    let role: UserRole = 'user';
+    let plan: SubscriptionPlan = 'free';
+    let email: string | undefined = undefined;
+
+    // 1. Fetch from Supabase public.users if available
+    if (this.supabase && userId) {
+      try {
+        const { data, error } = await this.supabase
+          .from('users')
+          .select('id, email, role, plan')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (data && !error) {
+          if (data.role === 'admin') role = 'admin';
+          if (data.plan === 'pro' || data.plan === 'premium') plan = data.plan;
+          email = data.email;
+        }
+      } catch (err) {
+        console.warn('[TRADEIQ DB] Error fetching user account from Supabase:', err);
+      }
+    }
+
+    // 2. Server-side environment admin check (secure server config)
+    const adminUserId = process.env.ADMIN_USER_ID;
+    const adminEmail = process.env.ADMIN_EMAIL;
+
+    if ((adminUserId && userId === adminUserId) || (adminEmail && email && email.toLowerCase() === adminEmail.toLowerCase())) {
+      role = 'admin';
+    }
+
+    return {
+      userId,
+      role,
+      plan,
+      email,
+    };
+  }
+
+  /**
    * Evaluates user's effective subscription and handles automatic expiration
    */
   async getEffectiveSubscription(userId: string): Promise<{
     plan: SubscriptionPlan;
+    role: UserRole;
+    isAdmin: boolean;
     isActive: boolean;
     expiresAt: string | null;
     daysRemaining: number;
   }> {
+    const account = await this.getUserAccount(userId);
+    const isAdmin = account.role === 'admin';
+
     let sub = this.memoryStore.subscriptions[userId] || null;
 
     if (this.supabase) {
@@ -371,7 +427,14 @@ export class DatabaseService {
     }
 
     if (!sub || sub.status !== 'active' || !sub.expiresAt) {
-      return { plan: 'free', isActive: false, expiresAt: null, daysRemaining: 0 };
+      return {
+        plan: account.plan,
+        role: account.role,
+        isAdmin,
+        isActive: false,
+        expiresAt: null,
+        daysRemaining: 0,
+      };
     }
 
     const expiryTime = new Date(sub.expiresAt).getTime();
@@ -391,16 +454,38 @@ export class DatabaseService {
         } catch (e) {}
       }
 
-      return { plan: 'free', isActive: false, expiresAt: sub.expiresAt, daysRemaining: 0 };
+      return {
+        plan: 'free',
+        role: account.role,
+        isAdmin,
+        isActive: false,
+        expiresAt: sub.expiresAt,
+        daysRemaining: 0,
+      };
     }
 
     const daysRemaining = Math.max(0, Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24)));
     return {
       plan: sub.plan,
+      role: account.role,
+      isAdmin,
       isActive: true,
       expiresAt: sub.expiresAt,
       daysRemaining,
     };
+  }
+
+  /**
+   * Checks whether a user has access to a specific feature
+   */
+  async checkFeatureAccess(userId: string, feature: FeatureId): Promise<boolean> {
+    const account = await this.getUserAccount(userId);
+    const sub = await this.getEffectiveSubscription(userId);
+    return hasFeatureAccess({
+      id: userId,
+      role: account.role,
+      plan: sub.isActive ? sub.plan : account.plan,
+    }, feature);
   }
 
   // ==========================================
@@ -408,17 +493,35 @@ export class DatabaseService {
   // ==========================================
 
   /**
-   * Validates and increments user's monthly AI usage against their active plan limit
+   * Validates and increments user's monthly AI usage against their active plan limit.
+   * Admins have UNLIMITED bypass access for testing all features without purchasing.
    */
   async checkAndIncrementAiQuota(userId: string, feature: 'chart_analysis' | 'trade_review'): Promise<{
     allowed: boolean;
     currentCount: number;
     limit: number;
     plan: SubscriptionPlan;
+    role?: UserRole;
+    unlimited?: boolean;
     error?: string;
   }> {
+    const account = await this.getUserAccount(userId);
+
+    // ADMIN FULL ACCESS: Bypass all quotas for testing
+    if (account.role === 'admin') {
+      return {
+        allowed: true,
+        currentCount: 0,
+        limit: 999999,
+        plan: account.plan,
+        role: 'admin',
+        unlimited: true,
+      };
+    }
+
     const subInfo = await this.getEffectiveSubscription(userId);
-    const planConfig = PRICING_PLANS[subInfo.plan];
+    const effectivePlan = subInfo.isActive ? subInfo.plan : account.plan;
+    const planConfig = PRICING_PLANS[effectivePlan];
     const limit = feature === 'chart_analysis'
       ? planConfig.aiLimits.chartAnalysesPerMonth
       : planConfig.aiLimits.tradeReviewsPerMonth;
@@ -449,8 +552,9 @@ export class DatabaseService {
         allowed: false,
         currentCount: usageCount,
         limit,
-        plan: subInfo.plan,
-        error: `Monthly ${feature === 'chart_analysis' ? 'chart analysis' : 'AI review'} quota reached (${usageCount}/${limit}). Upgrade to ${subInfo.plan === 'free' ? 'PRO or PREMIUM' : 'PREMIUM'} for higher limits.`,
+        plan: effectivePlan,
+        role: account.role,
+        error: `Monthly ${feature === 'chart_analysis' ? 'chart analysis' : 'AI review'} quota reached (${usageCount}/${limit}). Upgrade to ${effectivePlan === 'free' ? 'PRO or PREMIUM' : 'PREMIUM'} for higher limits.`,
       };
     }
 
@@ -477,7 +581,8 @@ export class DatabaseService {
       allowed: true,
       currentCount: usageCount + 1,
       limit,
-      plan: subInfo.plan,
+      plan: effectivePlan,
+      role: account.role,
     };
   }
 }

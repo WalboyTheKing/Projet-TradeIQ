@@ -56,11 +56,16 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
         const data = await res.json();
         if (isMounted && data.success && data.subscription) {
           setActiveSubData(data.subscription);
+          const updates: Partial<UserProfile> = {};
+          if (data.subscription.role && data.subscription.role !== userProfile.role) {
+            updates.role = data.subscription.role;
+          }
           if (data.subscription.plan && data.subscription.plan !== userProfile.plan) {
-            onUpdateProfile({
-              plan: data.subscription.plan,
-              subscriptionTier: data.subscription.plan === 'premium' ? 'ELITE' : data.subscription.plan === 'pro' ? 'PRO' : 'STARTER',
-            });
+            updates.plan = data.subscription.plan;
+            updates.subscriptionTier = data.subscription.plan === 'premium' ? 'ELITE' : data.subscription.plan === 'pro' ? 'PRO' : 'STARTER';
+          }
+          if (Object.keys(updates).length > 0) {
+            onUpdateProfile(updates);
           }
         }
       } catch (e) {
@@ -128,6 +133,24 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
         </div>
       )}
 
+      {/* Admin Full Access Notice */}
+      {userProfile.role === 'admin' && (
+        <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-200 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <ShieldCheck className="w-5 h-5 text-purple-400 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-white">Administrator Mode Active</p>
+              <p className="text-xs text-purple-300/80">
+                You have unrestricted Full Access to all PRO and PREMIUM features, trade limits, and AI quota bypass for platform verification and testing.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+            ROLE: ADMIN
+          </span>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800">
         <div>
@@ -145,27 +168,36 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
         {/* Current Plan Badge */}
         <div className="px-5 py-4 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center space-x-4">
           <div>
-            <p className="text-xs text-slate-400">Current Active Plan</p>
+            <p className="text-xs text-slate-400">Current Plan</p>
             <p className="text-lg font-bold text-white flex items-center gap-2 mt-0.5">
-              {currentPlan.name}
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-medium">
+              {userProfile.role === 'admin' ? 'ADMIN (Full Access)' : currentPlan.name}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                userProfile.role === 'admin' ? 'bg-purple-500/20 text-purple-300' : 'bg-emerald-500/20 text-emerald-300'
+              }`}>
                 Active
               </span>
             </p>
-            {activeSubData?.currentPeriodEnd && activeSubData.daysRemaining !== null && (
-              <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                <Clock className="w-3 h-3 text-emerald-400" />
-                {activeSubData.daysRemaining > 0
-                  ? `${activeSubData.daysRemaining} days remaining (renews/expires ${new Date(activeSubData.currentPeriodEnd).toLocaleDateString()})`
-                  : 'Subscription Expired'}
+            {userProfile.role === 'admin' ? (
+              <p className="text-[11px] text-purple-400 mt-1 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-purple-400" />
+                No subscription expiration (Admin role)
               </p>
+            ) : (
+              activeSubData?.currentPeriodEnd && activeSubData.daysRemaining !== null && (
+                <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-emerald-400" />
+                  {activeSubData.daysRemaining > 0
+                    ? `${activeSubData.daysRemaining} days remaining (renews/expires ${new Date(activeSubData.currentPeriodEnd).toLocaleDateString()})`
+                    : 'Subscription Expired'}
+                </p>
+              )
             )}
           </div>
           <div className="h-9 w-px bg-slate-800" />
           <div>
             <p className="text-xs text-slate-400">AI Chart Quota</p>
             <p className="text-sm font-semibold text-emerald-400 mt-0.5">
-              {currentPlan.aiLimits.chartAnalysesPerMonth} / month
+              {userProfile.role === 'admin' ? 'Unlimited' : `${currentPlan.aiLimits.chartAnalysesPerMonth} / mo`}
             </p>
           </div>
         </div>

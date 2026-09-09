@@ -177,12 +177,12 @@ export const SupportView: React.FC<SupportViewProps> = ({ userProfile }) => {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-sm font-bold text-white">Support VIP Pro / Elite</div>
+              <div className="text-sm font-bold text-white">Support VIP Pro / Premium</div>
               <div className="text-xs text-slate-400">Priorité Haute 7j/7</div>
             </div>
           </div>
           <p className="text-xs text-slate-400 mb-3">
-            Les membres Pro et Elite bénéficient d'un traitement prioritaire pour l'intégration de comptes.
+            Les membres Pro et Premium bénéficient d'un traitement prioritaire pour l'intégration de comptes et l'analyse quantitative.
           </p>
           <div className="text-xs font-semibold text-purple-400 font-mono flex items-center gap-1">
             <Shield className="w-3 h-3" />
