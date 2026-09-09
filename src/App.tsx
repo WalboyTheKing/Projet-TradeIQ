@@ -230,8 +230,17 @@ export default function App() {
       return;
     }
     setTradeLimitError(null);
-    await tradeService.addTrade(user ? user.id : null, isDemo, tradeData);
-    await reloadData();
+    try {
+      await tradeService.addTrade(user ? user.id : null, isDemo, tradeData);
+      await reloadData();
+    } catch (err: any) {
+      if (err?.message && err.message.includes('TRADE_LIMIT_EXCEEDED')) {
+        setTradeLimitError('Database limit reached: Free Tier is limited to 50 trades. Please upgrade to Pro or Premium.');
+        setCurrentTab('billing');
+      } else {
+        console.error('Failed to save trade:', err);
+      }
+    }
   };
 
   const handleDeleteTrade = async (id: string) => {
@@ -278,8 +287,25 @@ export default function App() {
   };
 
   const handleImportTrades = async (newTrades: Omit<Trade, 'id' | 'created_at'>[]) => {
-    await tradeService.importTrades(user ? user.id : null, isDemo, newTrades);
-    await reloadData();
+    const isAdmin = activeProfile.role === 'admin';
+    const isFree = (activeProfile.plan || 'free') === 'free';
+    if (!isAdmin && isFree && trades.length + newTrades.length > 50) {
+      setTradeLimitError(`Import would exceed the Free Tier limit of 50 trades (currently ${trades.length}, trying to add ${newTrades.length}). Please upgrade to Pro or Premium for unlimited trades.`);
+      setCurrentTab('billing');
+      return;
+    }
+    setTradeLimitError(null);
+    try {
+      await tradeService.importTrades(user ? user.id : null, isDemo, newTrades);
+      await reloadData();
+    } catch (err: any) {
+      if (err?.message && err.message.includes('TRADE_LIMIT_EXCEEDED')) {
+        setTradeLimitError('Database limit reached: Free Tier is limited to 50 trades. Please upgrade to Pro or Premium.');
+        setCurrentTab('billing');
+      } else {
+        console.error('Failed to import trades:', err);
+      }
+    }
   };
 
   const handleSignOut = async () => {

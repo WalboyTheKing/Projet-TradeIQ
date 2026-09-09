@@ -160,3 +160,45 @@ BEGIN
   );
 END;
 $$;
+
+-- 5. Trade Limit Check Trigger (Strict 50-trade limit for Free tier, Unlimited for Pro, Premium, Admin)
+CREATE OR REPLACE FUNCTION public.check_user_trade_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_role user_role;
+  v_plan subscription_plan;
+  v_trade_count INTEGER;
+BEGIN
+  -- Retrieve user role and plan
+  SELECT role, plan INTO v_role, v_plan
+  FROM public.users
+  WHERE id = NEW.user_id;
+
+  -- Admins, Pro, and Premium have UNLIMITED trades
+  IF v_role = 'admin' OR v_plan IN ('pro', 'premium') THEN
+    RETURN NEW;
+  END IF;
+
+  -- Count existing trades for this user
+  SELECT COUNT(*) INTO v_trade_count
+  FROM public.trades
+  WHERE user_id = NEW.user_id;
+
+  IF v_trade_count >= 50 THEN
+    RAISE EXCEPTION 'TRADE_LIMIT_EXCEEDED: Free plan is limited to 50 trades. Please upgrade to Pro or Premium for unlimited trades.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_check_trade_limit ON public.trades;
+CREATE TRIGGER trg_check_trade_limit
+  BEFORE INSERT ON public.trades
+  FOR EACH ROW
+  EXECUTE FUNCTION public.check_user_trade_limit();
+
+-- 6. Automatically promote designated administrator email if present
+UPDATE public.users
+SET role = 'admin'
+WHERE LOWER(email) = LOWER('walioulabouda2@gmail.com');

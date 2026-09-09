@@ -122,11 +122,12 @@ app.all('/api/supabase-proxy/*', async (req: Request, res: Response) => {
 app.get('/api/user/subscription', async (req: Request, res: Response) => {
   try {
     const userId = (req.query.userId as string) || (req.headers['x-user-id'] as string) || 'usr_default';
+    const userEmail = (req.query.email as string) || (req.headers['x-user-email'] as string) || undefined;
     const { dbService } = await import('./src/server/db.js').catch(async () => {
       return await import('./src/server/db');
     });
 
-    const subscription = await dbService.getEffectiveSubscription(userId);
+    const subscription = await dbService.getEffectiveSubscription(userId, userEmail);
     return res.status(200).json({ success: true, subscription });
   } catch (err: any) {
     console.error('Error fetching subscription:', err);
@@ -138,13 +139,14 @@ app.get('/api/user/subscription', async (req: Request, res: Response) => {
 app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
   try {
     const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
+    const userEmail = req.body?.userEmail || (req.headers['x-user-email'] as string) || undefined;
 
     // 1. Check & increment monthly AI quota from Supabase / DB
     const { dbService } = await import('./src/server/db.js').catch(async () => {
       return await import('./src/server/db');
     });
 
-    const quota = await dbService.checkAndIncrementAiQuota(userId, 'chart_analysis');
+    const quota = await dbService.checkAndIncrementAiQuota(userId, 'chart_analysis', userEmail);
     if (!quota.allowed) {
       return res.status(403).json({
         error: quota.error,
@@ -422,6 +424,7 @@ Do NOT promise future profit. Return purely JSON without markdown backticks.`;
 app.post('/api/ai/weekly-review', async (req: Request, res: Response) => {
   const { trades, periodName } = req.body;
   const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
+  const userEmail = req.body?.userEmail || (req.headers['x-user-email'] as string) || undefined;
   const tradeList = Array.isArray(trades) ? trades : [];
 
   // Check authorization
@@ -430,7 +433,7 @@ app.post('/api/ai/weekly-review', async (req: Request, res: Response) => {
       return await import('./src/server/db');
     });
 
-    const hasAccess = await dbService.checkFeatureAccess(userId, 'ai-weekly-review');
+    const hasAccess = await dbService.checkFeatureAccess(userId, 'ai-weekly-review', userEmail);
     if (!hasAccess) {
       return res.status(403).json({
         error: 'AI Weekly Review requires a PRO or PREMIUM plan. Please upgrade to unlock.',
@@ -585,4 +588,9 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export { app };
+export default app;

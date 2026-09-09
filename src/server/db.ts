@@ -341,10 +341,10 @@ export class DatabaseService {
    * Retrieves persistent user account metadata (role, plan, email)
    * Safely considers ADMIN_USER_ID or ADMIN_EMAIL server-side environment variables.
    */
-  async getUserAccount(userId: string): Promise<UserAccountData> {
+  async getUserAccount(userId: string, candidateEmail?: string): Promise<UserAccountData> {
     let role: UserRole = 'user';
     let plan: SubscriptionPlan = 'free';
-    let email: string | undefined = undefined;
+    let email: string | undefined = candidateEmail;
 
     // 1. Fetch from Supabase public.users if available
     if (this.supabase && userId) {
@@ -358,7 +358,7 @@ export class DatabaseService {
         if (data && !error) {
           if (data.role === 'admin') role = 'admin';
           if (data.plan === 'pro' || data.plan === 'premium') plan = data.plan;
-          email = data.email;
+          if (data.email) email = data.email;
         }
       } catch (err) {
         console.warn('[TRADEIQ DB] Error fetching user account from Supabase:', err);
@@ -367,9 +367,13 @@ export class DatabaseService {
 
     // 2. Server-side environment admin check (secure server config)
     const adminUserId = process.env.ADMIN_USER_ID;
-    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminEmail = process.env.ADMIN_EMAIL || 'walioulabouda2@gmail.com';
 
-    if ((adminUserId && userId === adminUserId) || (adminEmail && email && email.toLowerCase() === adminEmail.toLowerCase())) {
+    if (
+      (adminUserId && userId === adminUserId) ||
+      (adminEmail && email && email.toLowerCase() === adminEmail.toLowerCase()) ||
+      (adminEmail && candidateEmail && candidateEmail.toLowerCase() === adminEmail.toLowerCase())
+    ) {
       role = 'admin';
     }
 
@@ -384,7 +388,7 @@ export class DatabaseService {
   /**
    * Evaluates user's effective subscription and handles automatic expiration
    */
-  async getEffectiveSubscription(userId: string): Promise<{
+  async getEffectiveSubscription(userId: string, candidateEmail?: string): Promise<{
     plan: SubscriptionPlan;
     role: UserRole;
     isAdmin: boolean;
@@ -392,7 +396,7 @@ export class DatabaseService {
     expiresAt: string | null;
     daysRemaining: number;
   }> {
-    const account = await this.getUserAccount(userId);
+    const account = await this.getUserAccount(userId, candidateEmail);
     const isAdmin = account.role === 'admin';
 
     let sub = this.memoryStore.subscriptions[userId] || null;
@@ -478,9 +482,9 @@ export class DatabaseService {
   /**
    * Checks whether a user has access to a specific feature
    */
-  async checkFeatureAccess(userId: string, feature: FeatureId): Promise<boolean> {
-    const account = await this.getUserAccount(userId);
-    const sub = await this.getEffectiveSubscription(userId);
+  async checkFeatureAccess(userId: string, feature: FeatureId, candidateEmail?: string): Promise<boolean> {
+    const account = await this.getUserAccount(userId, candidateEmail);
+    const sub = await this.getEffectiveSubscription(userId, candidateEmail);
     return hasFeatureAccess({
       id: userId,
       role: account.role,
@@ -496,7 +500,7 @@ export class DatabaseService {
    * Validates and increments user's monthly AI usage against their active plan limit.
    * Admins have UNLIMITED bypass access for testing all features without purchasing.
    */
-  async checkAndIncrementAiQuota(userId: string, feature: 'chart_analysis' | 'trade_review'): Promise<{
+  async checkAndIncrementAiQuota(userId: string, feature: 'chart_analysis' | 'trade_review', candidateEmail?: string): Promise<{
     allowed: boolean;
     currentCount: number;
     limit: number;
@@ -505,7 +509,7 @@ export class DatabaseService {
     unlimited?: boolean;
     error?: string;
   }> {
-    const account = await this.getUserAccount(userId);
+    const account = await this.getUserAccount(userId, candidateEmail);
 
     // ADMIN FULL ACCESS: Bypass all quotas for testing
     if (account.role === 'admin') {

@@ -143,6 +143,9 @@ class TradeService {
       const { data, error } = await supabase.from('trades').insert(payload).select().single();
 
       if (error) {
+        if (error.message && (error.message.includes('TRADE_LIMIT_EXCEEDED') || error.message.includes('50 trades'))) {
+          throw new Error('TRADE_LIMIT_EXCEEDED: You have reached the Free Tier limit of 50 trades. Please upgrade to Pro or Premium for unlimited trades.');
+        }
         console.warn('[TradeService] Failed to insert trade to Supabase:', error.message);
         // Fallback save in local user cache
         const newTrade: Trade = {
