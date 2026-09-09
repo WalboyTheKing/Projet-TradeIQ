@@ -16,7 +16,8 @@ import {
   LogOut,
   HelpCircle,
   Home,
-  Coins
+  Coins,
+  CalendarDays
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
 import { UserProfile } from '../../types/trade';
@@ -27,6 +28,7 @@ export type NavTab =
   | 'trade-analysis'
   | 'journal'
   | 'calendar'
+  | 'economic-calendar'
   | 'statistics'
   | 'performance'
   | 'strategies'
@@ -88,6 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'trade-analysis', label: 'Trade Explorer', icon: Search },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'economic-calendar', label: 'Economic Calendar', icon: CalendarDays },
     { id: 'statistics', label: 'Statistics', icon: BarChart2 },
     { id: 'performance', label: 'Performance', icon: TrendingUp },
     { id: 'strategies', label: 'Strategies', icon: Target },

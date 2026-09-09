@@ -14,6 +14,7 @@ import { AddTradeModal } from './components/journal/AddTradeModal';
 import { AIChartAnalysisView } from './components/chart-analysis/AIChartAnalysisView';
 import { TradeAnalysisView } from './components/trade-analysis/TradeAnalysisView';
 import { CalendarView } from './components/calendar/CalendarView';
+import { EconomicCalendarView } from './components/economic-calendar/EconomicCalendarView';
 import { StatisticsView } from './components/statistics/StatisticsView';
 import { PerformanceView } from './components/performance/PerformanceView';
 import { StrategiesView } from './components/strategies/StrategiesView';
@@ -557,7 +558,12 @@ export default function App() {
                 trades={trades}
                 onDeleteTrade={handleDeleteTrade}
                 onOpenAddTrade={() => setIsAddTradeOpen(true)}
+                onNavigateEconomic={() => setCurrentTab('economic-calendar')}
               />
+            )}
+
+            {currentTab === 'economic-calendar' && (
+              <EconomicCalendarView />
             )}
 
             {currentTab === 'statistics' && (

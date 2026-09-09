@@ -1,6 +1,6 @@
 {
   "name": "TRADEIQ — Trade Analytics & Journal SaaS",
-  "description": "Professional trade analytics, journal, risk metrics, AI trade reviews, calendar, and performance tracking platform.",
+  "description": "Professional trade analytics, journal, risk metrics, AI trade reviews, performance calendar, economic calendar, and trading performance tracking platform.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
