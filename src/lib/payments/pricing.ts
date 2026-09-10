@@ -108,7 +108,7 @@ export const PRICING_PLANS: Record<SubscriptionPlan, PlanDefinition> = {
     },
     features: [
       'Everything in PRO',
-      'Paper Trading Beta ($250k Prop Challenge, Audit Pré-Ordre IA, Slippage réel)',
+      'Paper Trading PREMIUM • BETA ($250k Prop Challenge, Audit Pré-Ordre IA, Slippage simulé)',
       '100 AI Chart Analyses / month',
       'Highest Priority Multimodal Vision Processing',
       'Deep Psychology & Discipline Audit',

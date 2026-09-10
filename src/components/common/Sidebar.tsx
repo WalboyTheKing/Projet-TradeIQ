@@ -110,12 +110,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const effectiveMobileOpen = isOpen || isMobileOpen;
 
-  // Tier-adaptive badge for Paper Trading: FREE for free users, PRO for pro, BETA for premium & admin
+  // Tier-adaptive badge for Paper Trading: FREE for free users, PRO for pro, PREMIUM for premium, ADMIN for admin
   const paperTradingBadge =
     userProfile?.role === 'admin'
-      ? 'BETA'
+      ? 'ADMIN'
       : userProfile?.plan === 'premium'
-      ? 'BETA'
+      ? 'PREMIUM'
       : userProfile?.plan === 'pro'
       ? 'PRO'
       : 'FREE';
@@ -271,7 +271,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                               : item.badge === 'BETA' || item.badge === 'PREMIUM'
                               ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'
-                              : item.badge === 'AI'
+                              : item.badge === 'ADMIN' || item.badge === 'AI'
                               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                               : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
                           }`}
