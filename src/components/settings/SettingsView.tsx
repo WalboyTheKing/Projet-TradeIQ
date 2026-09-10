@@ -229,19 +229,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
-                  Plan Actif
+                  Rôle Système
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  {userProfile.plan || 'FREE'}
-                </span>
+                {userProfile.role === 'admin' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    ADMIN
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+                    USER
+                  </span>
+                )}
               </div>
 
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
-                  Sécurité du plan
+                  Plan Actif
                 </span>
-                <span className="text-[11px] text-slate-400">
-                  Géré côté serveur (NOWPayments)
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  {userProfile.plan || 'FREE'}
                 </span>
               </div>
             </div>

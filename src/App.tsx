@@ -110,11 +110,16 @@ export default function App() {
         user.user_metadata?.name ||
         user.user_metadata?.full_name ||
         (user.email ? user.email.split('@')[0] : 'Waliou Labouda');
+
+      // Authoritative role: authProfile is the single source of truth
+      const authoritativeRole: 'user' | 'admin' =
+        authProfile?.role === 'admin' ? 'admin' : (userProfile.role === 'admin' && !authProfile ? 'admin' : (authProfile?.role || 'user'));
+
       return {
         id: user.id,
         name: derivedName,
         email: user.email || authProfile?.email || 'walioulabouda2@gmail.com',
-        role: authProfile?.role || userProfile.role || 'user',
+        role: authoritativeRole,
         currency: authProfile?.currency || 'USD',
         currencySymbol: authProfile?.currencySymbol || '$',
         timezone: authProfile?.timezone || 'UTC',
@@ -140,7 +145,7 @@ export default function App() {
         id: 'demo-session',
         name: 'Waliou Labouda',
         email: 'walioulabouda2@gmail.com',
-        role: userProfile.role || 'user',
+        role: 'user', // Demo session is always simulation user, never admin
         currency: 'USD',
         currencySymbol: '$',
         timezone: 'UTC',
@@ -192,6 +197,7 @@ export default function App() {
         id: authProfile.id || prev.id,
         email: authProfile.email || prev.email,
         name: authProfile.name || prev.name,
+        role: authProfile.role || prev.role || 'user',
         plan: authProfile.plan || prev.plan,
         subscriptionTier: (authProfile.plan?.toUpperCase() === 'PREMIUM'
           ? 'PREMIUM'
@@ -259,18 +265,21 @@ export default function App() {
   };
 
   const handleUpdateProfile = async (updated: Partial<UserProfile>) => {
-    // 1. Update local storage
-    storageService.saveUserProfile(updated);
-    setUserProfile((prev) => ({ ...prev, ...updated }));
+    // Strictly prevent client-side tampering of role or plan
+    const { role, plan, subscriptionTier, ...safeUpdated } = updated;
+
+    // 1. Update local storage with safe fields
+    storageService.saveUserProfile(safeUpdated);
+    setUserProfile((prev) => ({ ...prev, ...safeUpdated }));
 
     // 2. If logged in, sync safe fields with Supabase public.users
     if (user) {
       await updateAuthProfile({
-        name: updated.name,
-        accountCurrency: updated.accountCurrency,
-        initialCapital: updated.initialCapital,
-        monthlyProfitGoal: updated.monthlyProfitGoal,
-        maxRiskPerTrade: updated.maxRiskPerTrade,
+        name: safeUpdated.name,
+        accountCurrency: safeUpdated.accountCurrency,
+        initialCapital: safeUpdated.initialCapital,
+        monthlyProfitGoal: safeUpdated.monthlyProfitGoal,
+        maxRiskPerTrade: safeUpdated.maxRiskPerTrade,
       });
     }
   };

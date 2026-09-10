@@ -33,23 +33,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Sync or fetch profile from public.users using Supabase Auth user UUID
+  // Sync or fetch profile from Supabase Auth + backend + public.users
   const fetchUserProfile = useCallback(async (supabaseUser: User): Promise<UserProfile> => {
+    // 1. Authoritative role check from Supabase Auth app_metadata
+    const authRole: 'user' | 'admin' =
+      supabaseUser.app_metadata?.role === 'admin' ? 'admin' : 'user';
+
+    let serverRole: 'user' | 'admin' | null = null;
+    let serverPlan: 'free' | 'pro' | 'premium' | null = null;
+
+    // 2. Authoritative role and plan check from backend service
+    try {
+      const res = await fetch(
+        `/api/user/subscription?userId=${encodeURIComponent(supabaseUser.id)}&email=${encodeURIComponent(supabaseUser.email || '')}`,
+        {
+          headers: {
+            'x-user-id': supabaseUser.id,
+            'x-user-email': supabaseUser.email || '',
+          },
+        }
+      );
+      if (res.ok) {
+        const subData = await res.json();
+        if (subData.role === 'admin' || subData.isAdmin) {
+          serverRole = 'admin';
+        }
+        if (subData.subscription?.plan) {
+          serverPlan = subData.subscription.plan;
+        } else if (subData.plan) {
+          serverPlan = subData.plan;
+        }
+      }
+    } catch {
+      // Backend request optional / offline fallback
+    }
+
+    const initialRole: 'user' | 'admin' =
+      authRole === 'admin' || serverRole === 'admin' ? 'admin' : 'user';
+    const initialPlan: 'free' | 'pro' | 'premium' = serverPlan || 'free';
+
     const fallbackProfile: UserProfile = {
       id: supabaseUser.id,
-      name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'Trader',
+      name:
+        supabaseUser.user_metadata?.name ||
+        supabaseUser.user_metadata?.full_name ||
+        supabaseUser.email?.split('@')[0] ||
+        'Trader',
       email: supabaseUser.email || '',
-      role: 'user',
+      role: initialRole,
       currency: 'USD',
       currencySymbol: '$',
       timezone: 'UTC',
       defaultRiskUnit: '%',
       defaultRiskValue: 1.0,
       initialCapital: 10000,
-      plan: 'free',
+      plan: initialPlan,
       favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
       onboardingCompleted: false,
-      subscriptionTier: 'STARTER',
+      subscriptionTier:
+        initialPlan === 'premium' ? 'ELITE' : initialPlan === 'pro' ? 'PRO' : 'STARTER',
     };
 
     try {
@@ -64,21 +106,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data) {
+        const isDbAdmin = data.role === 'admin';
+        const effectiveRole: 'user' | 'admin' =
+          authRole === 'admin' || serverRole === 'admin' || isDbAdmin ? 'admin' : 'user';
+        const rawPlan = (serverPlan || data.plan || 'free').toLowerCase();
+        const effectivePlan: 'free' | 'pro' | 'premium' =
+          rawPlan === 'premium' ? 'premium' : rawPlan === 'pro' ? 'pro' : 'free';
+
         return {
           id: data.id,
           name: data.name || fallbackProfile.name,
           email: data.email || fallbackProfile.email,
-          role: (data.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+          role: effectiveRole,
           currency: data.currency || 'USD',
           currencySymbol: data.currency_symbol || '$',
           timezone: data.timezone || 'UTC',
           defaultRiskUnit: (data.default_risk_unit as '%' | '$') || '%',
           defaultRiskValue: Number(data.default_risk_value) || 1.0,
           initialCapital: Number(data.initial_capital) || 10000,
-          plan: data.plan || 'free',
+          plan: effectivePlan,
           favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
           onboardingCompleted: Boolean(data.onboarding_completed),
-          subscriptionTier: data.plan === 'premium' ? 'ELITE' : data.plan === 'pro' ? 'PRO' : 'STARTER',
+          subscriptionTier:
+            effectivePlan === 'premium' ? 'ELITE' : effectivePlan === 'pro' ? 'PRO' : 'STARTER',
         };
       }
 
@@ -87,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: supabaseUser.id,
         email: supabaseUser.email,
         name: fallbackProfile.name,
-        plan: 'free',
+        plan: fallbackProfile.plan,
         currency: 'USD',
         currency_symbol: '$',
         timezone: 'UTC',
@@ -108,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...fallbackProfile,
           id: inserted.id,
           name: inserted.name,
-          plan: inserted.plan || 'free',
+          plan: (serverPlan || inserted.plan || 'free') as any,
           onboardingCompleted: Boolean(inserted.onboarding_completed),
         };
       }
@@ -335,8 +385,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (updates: Partial<UserProfile>): Promise<{ error?: string }> => {
     if (!profile || !user) return { error: 'Aucun utilisateur connecté.' };
 
-    // Prevent client from changing plan
-    const { plan, subscriptionTier, ...safeUpdates } = updates;
+    // Prevent client from changing plan or role
+    const { plan, role, subscriptionTier, ...safeUpdates } = updates;
 
     const newProfile: UserProfile = {
       ...profile,

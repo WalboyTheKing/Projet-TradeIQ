@@ -49,7 +49,8 @@ export class DatabaseService {
   };
 
   constructor() {
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+    const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (supabaseUrl && supabaseKey && !supabaseUrl.includes('your-project')) {
@@ -339,7 +340,7 @@ export class DatabaseService {
 
   /**
    * Retrieves persistent user account metadata (role, plan, email)
-   * Safely considers ADMIN_USER_ID or ADMIN_EMAIL server-side environment variables.
+   * Safely considers Supabase Auth app_metadata, public.users, and server-side admin configuration.
    */
   async getUserAccount(userId: string, candidateEmail?: string): Promise<UserAccountData> {
     let role: UserRole = 'user';
@@ -347,11 +348,12 @@ export class DatabaseService {
     let email: string | undefined = candidateEmail;
 
     // 1. Fetch from Supabase public.users if available
-    if (this.supabase && userId) {
+    if (this.supabase && userId && userId !== 'usr_default' && userId !== 'demo-session') {
       try {
+        // First try selecting id, email, plan (guaranteed columns in public.users)
         const { data, error } = await this.supabase
           .from('users')
-          .select('id, email, role, plan')
+          .select('*')
           .eq('id', userId)
           .maybeSingle();
 
@@ -361,11 +363,28 @@ export class DatabaseService {
           if (data.email) email = data.email;
         }
       } catch (err) {
-        console.warn('[TRADEIQ DB] Error fetching user account from Supabase:', err);
+        console.warn('[TRADEIQ DB] Error fetching user account from Supabase public.users:', err);
+      }
+
+      // 2. Fetch from Supabase Auth admin to check app_metadata.role (authoritative Supabase Auth role)
+      try {
+        if (this.supabase.auth?.admin) {
+          const { data: authUserData, error: authErr } = await this.supabase.auth.admin.getUserById(userId);
+          if (authUserData?.user && !authErr) {
+            if (authUserData.user.app_metadata?.role === 'admin') {
+              role = 'admin';
+            }
+            if (authUserData.user.email && !email) {
+              email = authUserData.user.email;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[TRADEIQ DB] Error checking Supabase Auth admin user metadata:', err);
       }
     }
 
-    // 2. Server-side environment admin check (secure server config)
+    // 3. Server-side environment admin check (secure server config)
     const adminUserId = process.env.ADMIN_USER_ID;
     const adminEmail = process.env.ADMIN_EMAIL || 'walioulabouda2@gmail.com';
 
@@ -375,6 +394,17 @@ export class DatabaseService {
       (adminEmail && candidateEmail && candidateEmail.toLowerCase() === adminEmail.toLowerCase())
     ) {
       role = 'admin';
+    }
+
+    // 4. If identified as Admin, synchronize Supabase Auth app_metadata so token claims persist
+    if (role === 'admin' && this.supabase?.auth?.admin && userId && userId !== 'usr_default' && userId !== 'demo-session') {
+      try {
+        await this.supabase.auth.admin.updateUserById(userId, {
+          app_metadata: { role: 'admin' },
+        });
+      } catch {
+        // silent sync fallback
+      }
     }
 
     return {

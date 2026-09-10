@@ -127,11 +127,42 @@ app.get('/api/user/subscription', async (req: Request, res: Response) => {
       return await import('./src/server/db');
     });
 
+    const account = await dbService.getUserAccount(userId, userEmail);
     const subscription = await dbService.getEffectiveSubscription(userId, userEmail);
-    return res.status(200).json({ success: true, subscription });
+    return res.status(200).json({
+      success: true,
+      role: account.role,
+      plan: account.plan,
+      isAdmin: account.role === 'admin',
+      subscription,
+    });
   } catch (err: any) {
     console.error('Error fetching subscription:', err);
     return res.status(500).json({ error: err?.message || 'Failed to fetch subscription status' });
+  }
+});
+
+// Fast Account & Role Verification Endpoint
+app.get('/api/user/account', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.query.userId as string) || (req.headers['x-user-id'] as string) || 'usr_default';
+    const userEmail = (req.query.email as string) || (req.headers['x-user-email'] as string) || undefined;
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+
+    const account = await dbService.getUserAccount(userId, userEmail);
+    return res.status(200).json({
+      success: true,
+      userId: account.userId,
+      role: account.role,
+      plan: account.plan,
+      isAdmin: account.role === 'admin',
+      email: account.email,
+    });
+  } catch (err: any) {
+    console.error('Error fetching user account:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to fetch account' });
   }
 });
 
