@@ -50,6 +50,7 @@ export const PRICING_PLANS: Record<SubscriptionPlan, PlanDefinition> = {
     },
     features: [
       'Up to 50 active trade logs',
+      'Paper Trading Starter (10k demo balance, max 3 positions)',
       'Core Performance Dashboard & KPI Cards',
       'Trading Journal & Trade History',
       'Economic Calendar & Market Sessions',
@@ -82,7 +83,7 @@ export const PRICING_PLANS: Record<SubscriptionPlan, PlanDefinition> = {
       'AI Trade Review & Weekly Feedback',
       'Advanced Risk & Drawdown Analytics',
       'Monte Carlo Simulation & Advanced Stress Test',
-      'Paper Trading & Real-time Simulator',
+      'Paper Trading Pro (Capital 100 000 $, ordres illimités, multi-marchés)',
       'Strategy Builder & Management',
       'Universal CSV & Excel Import',
       'Exchange & Account Connections',
@@ -107,6 +108,7 @@ export const PRICING_PLANS: Record<SubscriptionPlan, PlanDefinition> = {
     },
     features: [
       'Everything in PRO',
+      'Paper Trading Beta ($250k Prop Challenge, Audit Pré-Ordre IA, Slippage réel)',
       '100 AI Chart Analyses / month',
       'Highest Priority Multimodal Vision Processing',
       'Deep Psychology & Discipline Audit',

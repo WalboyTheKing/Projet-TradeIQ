@@ -110,6 +110,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const effectiveMobileOpen = isOpen || isMobileOpen;
 
+  // Tier-adaptive badge for Paper Trading: FREE for free users, PRO for pro, BETA for premium & admin
+  const paperTradingBadge =
+    userProfile?.role === 'admin'
+      ? 'BETA'
+      : userProfile?.plan === 'premium'
+      ? 'BETA'
+      : userProfile?.plan === 'pro'
+      ? 'PRO'
+      : 'FREE';
+
   // Family groups exactly as requested:
   const navGroups: NavGroup[] = [
     {
@@ -127,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       family: 'Pro',
       items: [
-        { id: 'paper-trading', label: 'Paper Trading', icon: WalletCards, badge: 'PRO' },
+        { id: 'paper-trading', label: 'Paper Trading', icon: WalletCards, badge: paperTradingBadge },
         { id: 'trading-feedback', label: 'Trading Feedback', icon: Sparkles, badge: 'AI' },
         { id: 'journal', label: 'Trade Journal', icon: BookOpen },
         { id: 'stress-test', label: 'Stress Test', icon: Activity },
@@ -257,6 +267,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
                             item.badge === 'PRO'
                               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : item.badge === 'FREE'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : item.badge === 'BETA' || item.badge === 'PREMIUM'
+                              ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'
                               : item.badge === 'AI'
                               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                               : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'

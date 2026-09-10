@@ -652,7 +652,10 @@ export default function App() {
             )}
 
             {currentTab === 'paper-trading' && (
-              <PaperTradingView />
+              <PaperTradingView
+                userProfile={activeProfile}
+                onOpenUpgrade={() => setCurrentTab('billing')}
+              />
             )}
 
             {(currentTab === 'ai-analysis' || currentTab === 'ai-review' || currentTab === 'trading-feedback') && (
