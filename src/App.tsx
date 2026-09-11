@@ -115,14 +115,14 @@ export default function App() {
 
   // Isolated Active Profile derivation:
   // When user is authenticated in Real mode: strictly uses Supabase Auth + public.users (NO demo fallback)
-  // When in Demo mode: uses isolated Demo profile
+  // When in Demo mode: strictly uses isolated Demo profile ('TRADEIQ Demo')
   const activeProfile: UserProfile = React.useMemo(() => {
     if (user && !isDemo) {
       const derivedName =
         authProfile?.name ||
         user.user_metadata?.name ||
         user.user_metadata?.full_name ||
-        (user.email ? user.email.split('@')[0] : 'Waliou Labouda');
+        (user.email ? user.email.split('@')[0] : 'Trader');
 
       // Authoritative role: authProfile is the single source of truth
       const authoritativeRole: 'user' | 'admin' =
@@ -131,48 +131,30 @@ export default function App() {
       return {
         id: user.id,
         name: derivedName,
-        email: user.email || authProfile?.email || 'walioulabouda2@gmail.com',
+        email: user.email || authProfile?.email || '',
         role: authoritativeRole,
-        currency: authProfile?.currency || 'USD',
-        currencySymbol: authProfile?.currencySymbol || '$',
-        timezone: authProfile?.timezone || 'UTC',
-        defaultRiskUnit: authProfile?.defaultRiskUnit || '%',
-        defaultRiskValue: authProfile?.defaultRiskValue ?? 1.0,
-        initialCapital: authProfile?.initialCapital ?? 10000,
-        plan: authProfile?.plan || 'free',
-        favoriteMarkets: authProfile?.favoriteMarkets || ['Forex', 'Crypto', 'Indices'],
-        onboardingCompleted: authProfile?.onboardingCompleted ?? true,
+        currency: authProfile?.currency || userProfile.currency || 'USD',
+        currencySymbol: authProfile?.currencySymbol || userProfile.currencySymbol || '$',
+        timezone: authProfile?.timezone || userProfile.timezone || 'UTC',
+        defaultRiskUnit: authProfile?.defaultRiskUnit || userProfile.defaultRiskUnit || '%',
+        defaultRiskValue: authProfile?.defaultRiskValue ?? userProfile.defaultRiskValue ?? 1.0,
+        initialCapital: authProfile?.initialCapital ?? userProfile.initialCapital ?? 10000,
+        plan: authProfile?.plan || userProfile.plan || 'free',
+        favoriteMarkets: authProfile?.favoriteMarkets || userProfile.favoriteMarkets || ['Forex', 'Crypto', 'Indices'],
+        onboardingCompleted: authProfile?.onboardingCompleted ?? userProfile.onboardingCompleted ?? true,
         subscriptionTier: (authProfile?.plan?.toUpperCase() === 'PREMIUM'
           ? 'ELITE'
           : authProfile?.plan?.toUpperCase() === 'PRO'
           ? 'PRO'
           : 'STARTER') as any,
-        accountCurrency: authProfile?.accountCurrency || 'USD',
-        monthlyProfitGoal: authProfile?.monthlyProfitGoal || 2000,
-        maxRiskPerTrade: authProfile?.maxRiskPerTrade || 2.0,
+        accountCurrency: authProfile?.accountCurrency || userProfile.accountCurrency || 'USD',
+        monthlyProfitGoal: authProfile?.monthlyProfitGoal || userProfile.monthlyProfitGoal || 2000,
+        maxRiskPerTrade: authProfile?.maxRiskPerTrade || userProfile.maxRiskPerTrade || 2.0,
       };
     }
 
     if (isDemo) {
-      return {
-        id: 'demo-session',
-        name: 'Waliou Labouda',
-        email: 'walioulabouda2@gmail.com',
-        role: 'user', // Demo session is always simulation user, never admin
-        currency: 'USD',
-        currencySymbol: '$',
-        timezone: 'UTC',
-        defaultRiskUnit: '%',
-        defaultRiskValue: 1.0,
-        initialCapital: 50000,
-        plan: 'pro',
-        favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
-        onboardingCompleted: true,
-        subscriptionTier: 'PRO',
-        accountCurrency: 'USD',
-        monthlyProfitGoal: 5000,
-        maxRiskPerTrade: 1.5,
-      };
+      return storageService.getDemoProfile();
     }
 
     return userProfile;
@@ -281,11 +263,18 @@ export default function App() {
     // Strictly prevent client-side tampering of role or plan
     const { role, plan, subscriptionTier, ...safeUpdated } = updated;
 
-    // 1. Update local storage with safe fields
+    if (isDemo) {
+      // 1. In Demo mode: save ONLY to isolated demo profile in localStorage
+      const updatedDemo = storageService.saveDemoProfile(safeUpdated);
+      setUserProfile(updatedDemo);
+      return; // STRICTLY NO SUPABASE WRITE IN DEMO MODE
+    }
+
+    // 2. In Real mode: save to real local storage mirror
     storageService.saveUserProfile(safeUpdated);
     setUserProfile((prev) => ({ ...prev, ...safeUpdated }));
 
-    // 2. If logged in, sync safe fields with Supabase public.users
+    // 3. If authenticated in real mode, sync safe fields with Supabase public.users
     if (user) {
       await updateAuthProfile({
         name: safeUpdated.name,
@@ -302,10 +291,17 @@ export default function App() {
     await reloadData();
   };
 
-  const handleToggleDemo = (val?: boolean) => {
+  const handleToggleDemo = async (val?: boolean) => {
     const nextVal = typeof val === 'boolean' ? val : !isDemo;
     storageService.setDemoMode(nextVal);
     setIsDemo(nextVal);
+    const userId = user ? user.id : null;
+    const [loadedTrades, loadedStrats] = await Promise.all([
+      tradeService.getTrades(userId, nextVal),
+      tradeService.getStrategies(userId, nextVal),
+    ]);
+    setTrades(loadedTrades);
+    setStrategies(loadedStrats);
   };
 
   const handleImportTrades = async (newTrades: Omit<Trade, 'id' | 'created_at'>[]) => {
@@ -459,6 +455,12 @@ export default function App() {
         onNavigateHome={() => {
           setShowLanding(true);
           navigateTo('/', null);
+        }}
+        onExploreDemo={() => {
+          storageService.setDemoMode(true);
+          setIsDemo(true);
+          setShowLanding(false);
+          navigateTo('/dashboard', null);
         }}
       />
     );

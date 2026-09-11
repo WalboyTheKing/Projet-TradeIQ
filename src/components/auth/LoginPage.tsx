@@ -12,6 +12,7 @@ interface LoginPageProps {
   onNavigateForgotPassword: () => void;
   onSuccess?: () => void;
   onNavigateHome?: () => void;
+  onExploreDemo?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
@@ -19,6 +20,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onNavigateForgotPassword,
   onSuccess,
   onNavigateHome,
+  onExploreDemo,
 }) => {
   const { signInWithEmail, signInWithGoogle } = useAuth();
 
@@ -211,7 +213,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </form>
 
         {/* Footer Link */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80 text-center">
+        <div className="mt-6 pt-5 border-t border-slate-800/80 text-center space-y-3">
           <p className="text-xs text-slate-400">
             Vous n'avez pas encore de compte ?{' '}
             <button
@@ -222,6 +224,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               Créer un compte
             </button>
           </p>
+
+          {onExploreDemo && (
+            <div className="pt-2 border-t border-slate-800/40">
+              <button
+                type="button"
+                onClick={onExploreDemo}
+                className="text-xs text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <span>Explorer le Mode Démonstration sans compte</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -115,34 +115,47 @@ export class DatabaseService {
     this.memoryStore.payments[session.id] = session;
     this.saveLocalStore();
 
-    // 2. Save to Supabase if configured
+    // 2. Save to Supabase if configured and valid user UUID
     if (this.supabase) {
       try {
-        const { error } = await this.supabase.from('payments').upsert({
-          id: session.id,
-          user_id: session.userId,
-          provider: 'nowpayments',
-          provider_payment_id: session.id,
-          payment_method: 'crypto',
-          plan: session.plan,
-          amount_usdt: session.amountUsdt,
-          token: session.token,
-          network: session.network,
-          payment_address: session.paymentAddress,
-          transaction_hash: session.transactionHash,
-          status: session.status,
-          metadata: {
-            billingInterval: session.billingInterval,
-            instructions: session.instructions,
-            qrPayload: session.qrPayload,
-          },
-          expires_at: session.expiresAt,
-          paid_at: session.paidAt,
-          created_at: session.createdAt,
-        });
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.userId);
+        if (isUuid) {
+          // Check if record exists by provider_payment_id
+          const { data: existing } = await this.supabase
+            .from('payments')
+            .select('id')
+            .eq('provider_payment_id', session.id)
+            .maybeSingle();
 
-        if (error) {
-          console.warn('[TRADEIQ Supabase] Error saving payment:', error.message);
+          const paymentRecord = {
+            user_id: session.userId,
+            provider: 'nowpayments',
+            provider_payment_id: session.id,
+            payment_method: 'crypto',
+            plan: session.plan,
+            amount_usdt: session.amountUsdt,
+            token: session.token,
+            network: session.network,
+            payment_address: session.paymentAddress,
+            transaction_hash: session.transactionHash,
+            status: session.status,
+            metadata: {
+              billingInterval: session.billingInterval,
+              instructions: session.instructions,
+              qrPayload: session.qrPayload,
+            },
+            expires_at: session.expiresAt,
+            paid_at: session.paidAt,
+          };
+
+          if (existing?.id) {
+            await this.supabase.from('payments').update(paymentRecord).eq('id', existing.id);
+          } else {
+            await this.supabase.from('payments').insert({
+              ...paymentRecord,
+              created_at: session.createdAt,
+            });
+          }
         }
       } catch (err: any) {
         console.warn('[TRADEIQ Supabase] Exception saving payment:', err.message);

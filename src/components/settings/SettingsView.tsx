@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings as SettingsIcon,
   CreditCard,
@@ -42,6 +42,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [monthlyGoal, setMonthlyGoal] = useState(String(userProfile.monthlyProfitGoal || 3000));
   const [maxRisk, setMaxRisk] = useState(String(userProfile.maxRiskPerTrade || 2));
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  useEffect(() => {
+    setName(userProfile.name);
+    setEmail(userProfile.email);
+    setCapital(String(userProfile.initialCapital));
+    setCurrency(userProfile.accountCurrency);
+    setMonthlyGoal(String(userProfile.monthlyProfitGoal || 3000));
+    setMaxRisk(String(userProfile.maxRiskPerTrade || 2));
+  }, [userProfile]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();

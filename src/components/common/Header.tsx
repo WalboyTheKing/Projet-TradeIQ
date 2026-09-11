@@ -43,10 +43,12 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMobileMenu,
   onToggleMobileSidebar,
 }) => {
+  const currentDemoStatus = isDemoMode !== undefined ? isDemoMode : isDemo ?? false;
+
   const profile: UserProfile = {
     id: userProfile?.id || '',
-    name: userProfile?.name && userProfile.name !== 'Trader' ? userProfile.name : 'Waliou Labouda',
-    email: userProfile?.email || 'walioulabouda2@gmail.com',
+    name: userProfile?.name || (currentDemoStatus ? 'TRADEIQ Demo' : 'Trader'),
+    email: userProfile?.email || (currentDemoStatus ? 'demo@tradeiq.app' : ''),
     currency: userProfile?.currency || 'USD',
     currencySymbol: userProfile?.currencySymbol || '$',
     timezone: userProfile?.timezone || 'UTC',
@@ -59,7 +61,6 @@ export const Header: React.FC<HeaderProps> = ({
     subscriptionTier: userProfile?.subscriptionTier || 'STARTER',
   };
 
-  const currentDemoStatus = isDemoMode !== undefined ? isDemoMode : isDemo ?? false;
   const toggleDemo = (val: boolean) => {
     if (onToggleDemoMode) onToggleDemoMode(val);
     if (onToggleDemo) onToggleDemo(val);
@@ -167,7 +168,15 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="hidden lg:flex items-center gap-2.5 pl-2 border-l border-slate-800 text-xs">
           <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 border border-emerald-400/30 flex items-center justify-center text-slate-950 font-bold text-xs">
-            {profile.name === 'Waliou Labouda' ? 'WL' : profile.name?.charAt(0) || 'U'}
+            {profile.name
+              ? profile.name
+                  .split(' ')
+                  .filter(Boolean)
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()
+              : 'U'}
           </div>
           <span className="text-slate-300 font-medium">{profile.name}</span>
           {onSignOut && (

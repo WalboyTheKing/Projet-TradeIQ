@@ -12,15 +12,37 @@ const STORAGE_KEYS = {
   LIVE_TRADES: 'tradeiq_live_trades',
   DEMO_TRADES: 'tradeiq_demo_trades',
   STRATEGIES: 'tradeiq_strategies',
+  DEMO_STRATEGIES: 'tradeiq_demo_strategies',
   USER_PROFILE: 'tradeiq_user_profile',
+  DEMO_PROFILE: 'tradeiq_demo_profile',
   ACTIVE_VIEW: 'tradeiq_active_view',
   CHART_ANALYSES: 'tradeiq_chart_analyses',
 };
 
+export const DEMO_DEFAULT_PROFILE: UserProfile = {
+  id: 'demo-session',
+  name: 'TRADEIQ Demo',
+  email: 'demo@tradeiq.app',
+  role: 'user',
+  currency: 'USD',
+  currencySymbol: '$',
+  timezone: 'UTC',
+  defaultRiskUnit: '%',
+  defaultRiskValue: 1.0,
+  initialCapital: 50000,
+  plan: 'pro',
+  favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
+  onboardingCompleted: true,
+  subscriptionTier: 'PRO',
+  accountCurrency: 'USD',
+  monthlyProfitGoal: 5000,
+  maxRiskPerTrade: 1.5,
+};
+
 const DEFAULT_PROFILE: UserProfile = {
   id: '',
-  name: 'Waliou Labouda',
-  email: 'walioulabouda2@gmail.com',
+  name: 'Trader',
+  email: '',
   currency: 'USD',
   currencySymbol: '$',
   timezone: 'UTC',
@@ -30,6 +52,10 @@ const DEFAULT_PROFILE: UserProfile = {
   plan: 'free',
   favoriteMarkets: ['Forex', 'Crypto', 'Indices'],
   onboardingCompleted: true,
+  subscriptionTier: 'STARTER',
+  accountCurrency: 'USD',
+  monthlyProfitGoal: 2000,
+  maxRiskPerTrade: 2.0,
 };
 
 class StorageService {
@@ -44,7 +70,7 @@ class StorageService {
     window.dispatchEvent(new Event('tradeiq-data-changed'));
   }
 
-  // User Profile
+  // Real User Profile (localStorage mirror for offline / caching)
   getUserProfile(): UserProfile {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
@@ -71,6 +97,30 @@ class StorageService {
   clearUserProfile(): void {
     localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
     window.dispatchEvent(new Event('tradeiq-data-changed'));
+  }
+
+  // Isolated Demo Profile
+  getDemoProfile(): UserProfile {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.DEMO_PROFILE);
+      if (!data) return DEMO_DEFAULT_PROFILE;
+      const parsed = JSON.parse(data);
+      return {
+        ...DEMO_DEFAULT_PROFILE,
+        ...parsed,
+        role: 'user', // Demo session is always simulation user, never admin
+      };
+    } catch {
+      return DEMO_DEFAULT_PROFILE;
+    }
+  }
+
+  saveDemoProfile(profile: Partial<UserProfile>): UserProfile {
+    const current = this.getDemoProfile();
+    const updated = { ...current, ...profile, role: 'user' as const };
+    localStorage.setItem(STORAGE_KEYS.DEMO_PROFILE, JSON.stringify(updated));
+    window.dispatchEvent(new Event('tradeiq-data-changed'));
+    return updated;
   }
 
   // Strategies
@@ -190,6 +240,7 @@ class StorageService {
 
   resetDemoData(): void {
     localStorage.setItem(STORAGE_KEYS.DEMO_TRADES, JSON.stringify(DEMO_TRADES));
+    localStorage.setItem(STORAGE_KEYS.DEMO_PROFILE, JSON.stringify(DEMO_DEFAULT_PROFILE));
     window.dispatchEvent(new Event('tradeiq-data-changed'));
   }
 

@@ -92,10 +92,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   onClose,
 }) => {
+  const isDemoProfile = userProfile?.id === 'demo-session' || userProfile?.name === 'TRADEIQ Demo';
+
   const profile: UserProfile = {
     id: userProfile?.id || '',
-    name: userProfile?.name && userProfile.name !== 'Trader' ? userProfile.name : 'Waliou Labouda',
-    email: userProfile?.email || 'walioulabouda2@gmail.com',
+    name: userProfile?.name || (isDemoProfile ? 'TRADEIQ Demo' : 'Trader'),
+    email: userProfile?.email || (isDemoProfile ? 'demo@tradeiq.app' : ''),
     currency: userProfile?.currency || 'USD',
     currencySymbol: userProfile?.currencySymbol || '$',
     timezone: userProfile?.timezone || 'UTC',
