@@ -738,23 +738,8 @@ export default function App() {
               <PsychologyView trades={trades} />
             )}
 
-            {(currentTab === 'ai-analysis' || currentTab === 'ai-review') && (
-              <AiAnalysisView trades={trades} userProfile={activeProfile} />
-            )}
-
             {currentTab === 'import' && (
               <ImportView existingTrades={trades} onImportTrades={handleImportTrades} />
-            )}
-
-            {currentTab === 'reports' && (
-              <ReportsView trades={trades} userProfile={activeProfile} />
-            )}
-
-            {currentTab === 'billing' && (
-              <BillingView
-                userProfile={activeProfile}
-                onUpdateProfile={handleUpdateProfile}
-              />
             )}
 
             {(currentTab === 'settings' || currentTab === 'subscription') && (
