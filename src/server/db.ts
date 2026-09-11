@@ -69,8 +69,14 @@ export class DatabaseService {
       console.log('ℹ️ [TRADEIQ DB] Running in resilient local storage mode (Supabase credentials not yet configured).');
     }
 
-    // Local persistent backup
-    this.localStorePath = path.join(process.cwd(), '.data', 'store.json');
+    // Local persistent backup (use /tmp in serverless environments like Vercel to avoid read-only filesystem errors)
+    const isServerless = Boolean(
+      process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT
+    );
+    const baseDir = isServerless ? '/tmp' : process.cwd();
+    this.localStorePath = path.join(baseDir, '.data', 'store.json');
     this.memoryStore = this.loadLocalStore();
   }
 

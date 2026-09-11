@@ -74,9 +74,32 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
           }),
         });
 
-        const data = await res.json();
+        const contentType = res.headers.get('content-type') || '';
+
         if (!res.ok) {
-          throw new Error(data.error || 'Failed to initialize crypto checkout session');
+          let errorMsg = 'Erreur lors de la validation de la commande';
+          if (contentType.includes('application/json')) {
+            const errData = await res.json().catch(() => null);
+            if (errData?.error) {
+              errorMsg = errData.error;
+            }
+          } else {
+            const errorText = await res.text().catch(() => '');
+            console.error('Non-JSON server error response:', res.status, errorText);
+            errorMsg = `Erreur serveur (${res.status}) : Impossible de communiquer avec l'API de paiement crypto.`;
+          }
+          throw new Error(errorMsg);
+        }
+
+        if (!contentType.includes('application/json')) {
+          const responseText = await res.text().catch(() => '');
+          console.error('Expected JSON but received non-JSON response:', responseText);
+          throw new Error('Réponse serveur invalide (le serveur a renvoyé du texte au lieu de JSON).');
+        }
+
+        const data = await res.json();
+        if (!data?.session) {
+          throw new Error(data?.error || 'Session de paiement crypto invalide reçue.');
         }
 
         if (isMounted) {
@@ -95,7 +118,7 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
         }
       } catch (err: any) {
         if (isMounted) {
-          setError(err.message || 'Network error initiating crypto payment');
+          setError(err.message || 'Erreur réseau lors de l\'initialisation du paiement crypto.');
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -122,8 +145,11 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
       try {
         const res = await fetch(`/api/payments/status/${session.id}`);
         if (!res.ok) return;
-        const data = await res.json();
-        if (data.success && data.session) {
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
+
+        const data = await res.json().catch(() => null);
+        if (data?.success && data?.session) {
           setSession(data.session);
           if (data.session.status === 'completed') {
             onPaymentSuccess(plan);
@@ -183,13 +209,30 @@ export const CryptoCheckoutModal: React.FC<CryptoCheckoutModalProps> = ({
           txHash: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
         }),
       });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok) {
+        let errText = 'Erreur lors de la confirmation test';
+        if (contentType.includes('application/json')) {
+          const errData = await res.json().catch(() => null);
+          if (errData?.error) errText = errData.error;
+        } else {
+          errText = `Erreur serveur (${res.status})`;
+        }
+        throw new Error(errText);
+      }
+
+      if (!contentType.includes('application/json')) {
+        throw new Error('Réponse serveur non-JSON');
+      }
+
       const data = await res.json();
-      if (data.success && data.session) {
+      if (data?.success && data?.session) {
         setSession(data.session);
         onPaymentSuccess(plan);
       }
     } catch (err: any) {
-      alert('Sandbox confirmation error: ' + err.message);
+      alert('Sandbox confirmation: ' + err.message);
     } finally {
       setSimulating(false);
     }

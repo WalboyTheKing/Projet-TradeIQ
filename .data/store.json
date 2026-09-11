@@ -22,6 +22,75 @@
         "confirmationsNeeded": 15,
         "securityNote": "Send ONLY USDT via BNB Smart Chain (BEP-20). Deposits are monitored on-chain."
       }
+    },
+    "tradeiq_pro_monthly_1789159198977_c5f1f9": {
+      "id": "tradeiq_pro_monthly_1789159198977_c5f1f9",
+      "userId": "test-user",
+      "plan": "pro",
+      "billingInterval": "monthly",
+      "amountUsdt": 5,
+      "token": "USDT",
+      "network": "BSC",
+      "networkName": "BNB Smart Chain (BEP-20)",
+      "paymentAddress": "0x778F7c29fb8dc97916C352163413528361e75F4f",
+      "qrPayload": "ethereum:0x55d398326f99059fF775485246999027B3197955@56/transfer?address=0x778F7c29fb8dc97916C352163413528361e75F4f&uint256=5",
+      "status": "pending",
+      "createdAt": "2026-09-11T20:39:59.328Z",
+      "expiresAt": "2026-09-11T21:39:59.328Z",
+      "transactionHash": null,
+      "paidAt": null,
+      "instructions": {
+        "token": "USDT (Tether USD)",
+        "network": "BNB Smart Chain (BEP-20, Chain ID: 56)",
+        "confirmationsNeeded": 15,
+        "securityNote": "Send ONLY USDT via BNB Smart Chain (BEP-20). Deposits are monitored on-chain."
+      }
+    },
+    "tradeiq_pro_monthly_1789159456082_35b131": {
+      "id": "tradeiq_pro_monthly_1789159456082_35b131",
+      "userId": "user_test_123",
+      "plan": "pro",
+      "billingInterval": "monthly",
+      "amountUsdt": 5,
+      "token": "USDT",
+      "network": "BSC",
+      "networkName": "BNB Smart Chain (BEP-20)",
+      "paymentAddress": "0x778F7c29fb8dc97916C352163413528361e75F4f",
+      "qrPayload": "ethereum:0x55d398326f99059fF775485246999027B3197955@56/transfer?address=0x778F7c29fb8dc97916C352163413528361e75F4f&uint256=5",
+      "status": "pending",
+      "createdAt": "2026-09-11T20:44:16.472Z",
+      "expiresAt": "2026-09-11T21:44:16.472Z",
+      "transactionHash": null,
+      "paidAt": null,
+      "instructions": {
+        "token": "USDT (Tether USD)",
+        "network": "BNB Smart Chain (BEP-20, Chain ID: 56)",
+        "confirmationsNeeded": 15,
+        "securityNote": "Send ONLY USDT via BNB Smart Chain (BEP-20). Deposits are monitored on-chain."
+      }
+    },
+    "tradeiq_pro_monthly_1789159469578_adcd83": {
+      "id": "tradeiq_pro_monthly_1789159469578_adcd83",
+      "userId": "user_test_pro",
+      "plan": "pro",
+      "billingInterval": "monthly",
+      "amountUsdt": 5,
+      "token": "USDT",
+      "network": "BSC",
+      "networkName": "BNB Smart Chain (BEP-20)",
+      "paymentAddress": "0x778F7c29fb8dc97916C352163413528361e75F4f",
+      "qrPayload": "ethereum:0x55d398326f99059fF775485246999027B3197955@56/transfer?address=0x778F7c29fb8dc97916C352163413528361e75F4f&uint256=5",
+      "status": "pending",
+      "createdAt": "2026-09-11T20:44:30.003Z",
+      "expiresAt": "2026-09-11T21:44:30.003Z",
+      "transactionHash": null,
+      "paidAt": null,
+      "instructions": {
+        "token": "USDT (Tether USD)",
+        "network": "BNB Smart Chain (BEP-20, Chain ID: 56)",
+        "confirmationsNeeded": 15,
+        "securityNote": "Send ONLY USDT via BNB Smart Chain (BEP-20). Deposits are monitored on-chain."
+      }
     }
   },
   "subscriptions": {

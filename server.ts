@@ -7,8 +7,18 @@ import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Safe dirname helper compatible with both ESM (tsx/vite) and CJS bundling (node/vercel)
+const getAppDirname = () => {
+  try {
+    if (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string') {
+      return path.dirname(fileURLToPath(import.meta.url));
+    }
+  } catch {
+    // Ignore in CJS context
+  }
+  return typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+};
+const appDir = getAppDirname();
 
 const app = express();
 const PORT = 3000;
@@ -216,39 +226,64 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
 
 // 1. Create Crypto Checkout Session (NowPayments + Supabase persistence)
 app.post('/api/checkout/crypto', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
   try {
-    const { plan, billingInterval, network, userId } = req.body;
+    const { plan, billingInterval, network, userId } = req.body || {};
+
+    // Safe diagnostic logging (no sensitive secrets, API keys, or private keys are ever logged)
+    console.log(`[CRYPTO CHECKOUT] POST /api/checkout/crypto called for plan: ${plan}, interval: ${billingInterval}, network: ${network || 'BSC'}`);
+    console.log(`[CRYPTO CHECKOUT] Environment variables status: NOWPAYMENTS_API_KEY=${Boolean(process.env.NOWPAYMENTS_API_KEY || process.env.CRYPTO_API_KEY)}, CRYPTO_USDT_ADDRESS=${Boolean(process.env.CRYPTO_USDT_ADDRESS || process.env.USDT_BSC_DEPOSIT_ADDRESS)}, SUPABASE_DB=${Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)}`);
+
     if (!plan || !billingInterval) {
-      return res.status(400).json({ error: 'Missing required parameters: plan and billingInterval' });
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: plan and billingInterval',
+      });
+    }
+
+    if (plan !== 'pro' && plan !== 'premium') {
+      return res.status(400).json({
+        success: false,
+        error: `Plan '${plan}' does not require cryptocurrency checkout. Available for pro and premium only.`,
+      });
     }
 
     const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
       return await import('./src/lib/payments/cryptoProvider');
     });
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const appUrl = process.env.APP_URL || `${protocol}://${req.get('host')}`;
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host') || 'localhost:3000';
+    const appUrl = process.env.APP_URL || `${protocol}://${host}`;
+
+    const effectiveUserId = (userId && typeof userId === 'string' && userId.trim()) ? userId.trim() : 'usr_default';
 
     const session = await cryptoPaymentService.createPayment({
       plan,
       billingInterval,
       network: network || 'BSC',
-      userId: userId || 'usr_default',
-    }, userId || 'usr_default', appUrl);
+      userId: effectiveUserId,
+    }, effectiveUserId, appUrl);
+
+    console.log(`[CRYPTO CHECKOUT] Session created successfully: ${session.id} for ${session.amountUsdt} USDT on ${session.network}`);
 
     return res.status(200).json({ success: true, session });
   } catch (err: any) {
-    console.error('Error creating crypto checkout:', err);
-    return res.status(400).json({ error: err?.message || 'Failed to create crypto checkout session' });
+    console.error('[CRYPTO CHECKOUT] Error creating crypto checkout:', err?.message || err);
+    return res.status(400).json({
+      success: false,
+      error: err?.message || 'Failed to create crypto checkout session',
+    });
   }
 });
 
 // 2. Query Crypto Payment Status
 app.get('/api/payments/status/:paymentId', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
   try {
     const { paymentId } = req.params;
     if (!paymentId) {
-      return res.status(400).json({ error: 'Payment ID is required' });
+      return res.status(400).json({ success: false, error: 'Payment ID is required' });
     }
 
     const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
@@ -257,18 +292,19 @@ app.get('/api/payments/status/:paymentId', async (req: Request, res: Response) =
 
     const session = await cryptoPaymentService.getPayment(paymentId);
     if (!session) {
-      return res.status(404).json({ error: 'Payment session not found or expired' });
+      return res.status(404).json({ success: false, error: 'Payment session not found or expired' });
     }
 
     return res.status(200).json({ success: true, session });
   } catch (err: any) {
     console.error('Error retrieving payment status:', err);
-    return res.status(500).json({ error: 'Internal server error checking payment status' });
+    return res.status(500).json({ success: false, error: 'Internal server error checking payment status' });
   }
 });
 
 // 3. Crypto Payment Webhooks (NOWPayments IPN HMAC SHA-512 & Idempotency)
 const handleWebhook = async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
   try {
     const signature = (req.headers['x-nowpayments-sig'] || req.headers['x-signature']) as string | undefined;
     const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
@@ -278,14 +314,14 @@ const handleWebhook = async (req: Request, res: Response) => {
     const verified = cryptoPaymentService.verifyWebhook(req.body, signature);
     if (!verified.isValid) {
       console.warn('Crypto webhook verification failed:', verified.error);
-      return res.status(400).json({ error: verified.error });
+      return res.status(400).json({ success: false, error: verified.error });
     }
 
     const processResult = await cryptoPaymentService.processWebhookEvent(verified);
     return res.status(200).json({ success: true, result: processResult });
   } catch (err: any) {
     console.error('Error processing crypto webhook:', err);
-    return res.status(500).json({ error: 'Webhook processing failure' });
+    return res.status(500).json({ success: false, error: 'Webhook processing failure' });
   }
 };
 
@@ -294,10 +330,11 @@ app.post('/api/payments/nowpayments/ipn', handleWebhook);
 
 // 4. Sandbox Payment Confirmation (Test simulation)
 app.post('/api/checkout/crypto/sandbox-confirm', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
   try {
-    const { paymentId, txHash } = req.body;
+    const { paymentId, txHash } = req.body || {};
     if (!paymentId) {
-      return res.status(400).json({ error: 'Payment ID is required' });
+      return res.status(400).json({ success: false, error: 'Payment ID is required' });
     }
 
     const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
@@ -308,7 +345,7 @@ app.post('/api/checkout/crypto/sandbox-confirm', async (req: Request, res: Respo
     return res.status(200).json({ success: true, session });
   } catch (err: any) {
     console.error('Error in sandbox payment confirmation:', err);
-    return res.status(400).json({ error: err?.message || 'Failed to confirm test payment' });
+    return res.status(400).json({ success: false, error: err?.message || 'Sandbox confirmation failed' });
   }
 });
 
@@ -595,6 +632,26 @@ app.post('/api/import/csv', (req: Request, res: Response) => {
   }
 });
 
+// Catch-all 404 for unhandled API endpoints — strictly ensures JSON response, never HTML
+app.all('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: `API route not found: ${req.method} ${req.path}`,
+  });
+});
+
+// Centralized Express error handler — guarantees valid JSON on any uncaught exception
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error('[TRADEIQ API Server Error]', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  return res.status(err.status || 500).json({
+    success: false,
+    error: err?.message || 'Internal Server Error',
+  });
+});
+
 // ============================================================================
 // VITE MIDDLEWARE & STATIC SERVING
 // ============================================================================
@@ -610,6 +667,9 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ success: false, error: `API route not found: ${req.path}` });
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
@@ -619,7 +679,19 @@ async function startServer() {
   });
 }
 
-if (!process.env.VERCEL) {
+// Only start the standalone HTTP/Vite listener when run directly, avoiding duplicate listens on Vercel
+const isDirectEntry = Boolean(
+  process.argv[1] && (
+    process.argv[1].endsWith('server.ts') ||
+    process.argv[1].endsWith('server.cjs') ||
+    process.argv[1].endsWith('server.js')
+  )
+);
+
+if (isDirectEntry && !process.env.VERCEL) {
+  startServer();
+} else if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+  // Vite dev mode default fallback
   startServer();
 }
 
