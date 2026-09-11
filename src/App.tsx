@@ -92,13 +92,26 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [user]);
 
-  // Enforce Real Mode when a verified Supabase user logs in
+  // Enforce Real Mode when a verified Supabase user logs in, and auto-navigate away from auth routes
   useEffect(() => {
     if (user) {
       storageService.setDemoMode(false);
       setIsDemo(false);
+      if (authRoute === 'callback' || authRoute === 'login' || authRoute === 'register') {
+        navigateTo('/dashboard', null);
+        setShowLanding(false);
+      }
     }
-  }, [user]);
+  }, [user, authRoute]);
+
+  const handleCallbackSuccess = useCallback(() => {
+    navigateTo('/dashboard', null);
+    setShowLanding(false);
+  }, []);
+
+  const handleCallbackNavigateLogin = useCallback(() => {
+    navigateTo('/login', 'login');
+  }, []);
 
   // Isolated Active Profile derivation:
   // When user is authenticated in Real mode: strictly uses Supabase Auth + public.users (NO demo fallback)
@@ -351,11 +364,8 @@ export default function App() {
   if (authRoute === 'callback') {
     return (
       <AuthCallback
-        onSuccess={() => {
-          navigateTo('/dashboard', null);
-          setShowLanding(false);
-        }}
-        onNavigateLogin={() => navigateTo('/login', 'login')}
+        onSuccess={handleCallbackSuccess}
+        onNavigateLogin={handleCallbackNavigateLogin}
       />
     );
   }

@@ -42,17 +42,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let serverRole: 'user' | 'admin' | null = null;
     let serverPlan: 'free' | 'pro' | 'premium' | null = null;
 
-    // 2. Authoritative role and plan check from backend service
+    // 2. Authoritative role and plan check from backend service with 3.5s timeout
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
       const res = await fetch(
         `/api/user/subscription?userId=${encodeURIComponent(supabaseUser.id)}&email=${encodeURIComponent(supabaseUser.email || '')}`,
         {
+          signal: controller.signal,
           headers: {
             'x-user-id': supabaseUser.id,
             'x-user-email': supabaseUser.email || '',
           },
         }
       );
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         const subData = await res.json();
         if (subData.role === 'admin' || subData.isAdmin) {
@@ -65,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch {
-      // Backend request optional / offline fallback
+      // Backend request optional / offline fallback - never block the user
     }
 
     const initialRole: 'user' | 'admin' =
@@ -222,11 +228,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const refreshProfile = useCallback(async () => {
-    if (user) {
-      const p = await fetchUserProfile(user);
+    let targetUser = user;
+    if (!targetUser) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user) {
+          targetUser = data.session.user;
+          setUser(targetUser);
+          setSession(data.session);
+        }
+      } catch {
+        // Fallback silently
+      }
+    }
+    if (targetUser) {
+      const p = await fetchUserProfile(targetUser);
       setProfile(p);
     }
   }, [user, fetchUserProfile]);
+
+  // Helper for computing OAuth redirect URL for local, preview, and production Vercel
+  const getAuthCallbackUrl = (): string => {
+    if (typeof window === 'undefined') return 'https://projet-tradeiq.vercel.app/auth/callback';
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('.run.app')) {
+      return `${window.location.origin}/auth/callback`;
+    }
+    if (window.location.origin.includes('vercel.app')) {
+      return `${window.location.origin}/auth/callback`;
+    }
+    return 'https://projet-tradeiq.vercel.app/auth/callback';
+  };
 
   // Sign In with Email and Password strictly via Supabase Auth
   const signInWithEmail = async (email: string, password: string): Promise<{ error?: string }> => {
@@ -260,10 +292,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string
   ): Promise<{ error?: string; needsEmailVerification?: boolean }> => {
     try {
-      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      const emailRedirectTo = isLocalhost
-        ? `${window.location.origin}/auth/callback`
-        : 'https://projet-tradeiq.vercel.app/auth/callback';
+      const emailRedirectTo = getAuthCallbackUrl();
 
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -300,10 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sign In with Google OAuth strictly via Supabase Auth
   const signInWithGoogle = async (): Promise<{ error?: string }> => {
     try {
-      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      const redirectTo = isLocalhost
-        ? `${window.location.origin}/auth/callback`
-        : 'https://projet-tradeiq.vercel.app/auth/callback';
+      const redirectTo = getAuthCallbackUrl();
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
