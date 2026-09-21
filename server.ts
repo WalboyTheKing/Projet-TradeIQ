@@ -265,9 +265,19 @@ app.post('/api/checkout/crypto', async (req: Request, res: Response) => {
       userId: effectiveUserId,
     }, effectiveUserId, appUrl);
 
-    console.log(`[CRYPTO CHECKOUT] Session created successfully: ${session.id} for ${session.amountUsdt} USDT on ${session.network}`);
+    console.log(`[CRYPTO CHECKOUT] Session created successfully: ${session.id} for ${session.amountUsdt} USDT on ${session.network}. Deposit Address: ${session.depositAddress}`);
 
-    return res.status(200).json({ success: true, session });
+    return res.status(200).json({
+      success: true,
+      paymentId: session.id,
+      amount: session.amountUsdt,
+      currency: session.currency || 'USDT',
+      network: session.network,
+      depositAddress: session.depositAddress,
+      paymentAddress: session.depositAddress,
+      expiresAt: session.expiresAt,
+      session,
+    });
   } catch (err: any) {
     console.error('[CRYPTO CHECKOUT] Error creating crypto checkout:', err?.message || err);
     return res.status(400).json({
@@ -295,14 +305,48 @@ app.get('/api/payments/status/:paymentId', async (req: Request, res: Response) =
       return res.status(404).json({ success: false, error: 'Payment session not found or expired' });
     }
 
-    return res.status(200).json({ success: true, session });
+    return res.status(200).json({
+      success: true,
+      status: session.status,
+      confirmations: session.confirmations,
+      requiredConfirmations: session.requiredConfirmations,
+      depositAddress: session.depositAddress,
+      transactionHash: session.transactionHash,
+      sweepStatus: session.sweepStatus,
+      session,
+    });
   } catch (err: any) {
     console.error('Error retrieving payment status:', err);
     return res.status(500).json({ success: false, error: 'Internal server error checking payment status' });
   }
 });
 
-// 3. Crypto Payment Webhooks (NOWPayments IPN HMAC SHA-512 & Idempotency)
+// 2b. Verify On-Chain Transaction Hash (BSC Verification)
+app.post('/api/payments/verify-tx', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  try {
+    const { paymentId, txHash } = req.body || {};
+    if (!paymentId || !txHash) {
+      return res.status(400).json({ success: false, error: 'paymentId and txHash are required' });
+    }
+
+    const { cryptoPaymentService } = await import('./src/lib/payments/cryptoProvider.js').catch(async () => {
+      return await import('./src/lib/payments/cryptoProvider');
+    });
+
+    const result = await cryptoPaymentService.verifyAndAttachTx(paymentId, txHash);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    return res.status(200).json({ success: true, session: result.session });
+  } catch (err: any) {
+    console.error('Error verifying tx:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Verification failed' });
+  }
+});
+
+// 3. Crypto Payment Webhooks (BSC on-chain transfers / Gateway notifications)
 const handleWebhook = async (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
   try {
@@ -346,6 +390,92 @@ app.post('/api/checkout/crypto/sandbox-confirm', async (req: Request, res: Respo
   } catch (err: any) {
     console.error('Error in sandbox payment confirmation:', err);
     return res.status(400).json({ success: false, error: err?.message || 'Sandbox confirmation failed' });
+  }
+});
+
+// 5. Admin Payments & Settlement Audit Endpoint
+app.get('/api/admin/payments', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  try {
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+
+    const [payments, unmatched] = await Promise.all([
+      dbService.getAllPayments(),
+      dbService.getUnmatchedPayments(),
+    ]);
+
+    // Format strictly without any private keys or seeds
+    const sanitizedPayments = payments.map((p) => ({
+      paymentId: p.id,
+      userId: p.userId,
+      plan: p.plan,
+      amount: p.amountUsdt,
+      currency: p.currency,
+      network: p.network,
+      depositAddress: p.depositAddress,
+      transactionHash: p.transactionHash || null,
+      confirmations: p.confirmations || 0,
+      requiredConfirmations: p.requiredConfirmations || 15,
+      paymentStatus: p.status,
+      sweepStatus: p.sweepStatus || 'not_required',
+      sweepTransaction: p.sweepTxHash || null,
+      merchantAddress: p.merchantAddress || null,
+      createdAt: p.createdAt,
+      expiresAt: p.expiresAt,
+      paidAt: p.paidAt || null,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      payments: sanitizedPayments,
+      unmatched,
+      count: sanitizedPayments.length,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/admin/payments:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to fetch admin payments' });
+  }
+});
+
+// 6. Admin Manual Sweep Trigger
+app.post('/api/admin/payments/sweep', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  try {
+    const { paymentId } = req.body || {};
+    if (!paymentId) {
+      return res.status(400).json({ success: false, error: 'paymentId is required' });
+    }
+
+    const { dbService } = await import('./src/server/db.js').catch(async () => {
+      return await import('./src/server/db');
+    });
+    const { sweepService } = await import('./src/lib/payments/sweepService.js').catch(async () => {
+      return await import('./src/lib/payments/sweepService');
+    });
+
+    const session = await dbService.getPaymentSession(paymentId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Payment session not found' });
+    }
+
+    const sweepResult = await sweepService.sweepPayment(session);
+    session.sweepStatus = sweepResult.sweepStatus;
+    if (sweepResult.sweepTxHash) session.sweepTxHash = sweepResult.sweepTxHash;
+    if (sweepResult.amountUsdt) session.sweepAmountUsdt = sweepResult.amountUsdt;
+    if (sweepResult.error) session.sweepError = sweepResult.error;
+
+    await dbService.savePaymentSession(session);
+
+    return res.status(200).json({
+      success: sweepResult.success,
+      result: sweepResult,
+      session,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/admin/payments/sweep:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Sweep trigger failed' });
   }
 });
 

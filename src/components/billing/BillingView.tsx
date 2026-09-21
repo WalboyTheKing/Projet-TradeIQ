@@ -21,6 +21,7 @@ import {
   ACTIVE_CRYPTO_NETWORK,
 } from '../../lib/payments/pricing';
 import { CryptoCheckoutModal } from './CryptoCheckoutModal';
+import { AdminPaymentAuditView } from './AdminPaymentAuditView';
 
 interface BillingViewProps {
   userProfile: UserProfile;
@@ -402,6 +403,11 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
             • No Stripe, PayPal, or credit cards are retained or requested.
           </p>
         </div>
+
+        {/* Admin Multi-User Settlement & Sweep Dashboard */}
+        {userProfile.role === 'admin' && (
+          <AdminPaymentAuditView />
+        )}
       </div>
 
       {/* Checkout Modal */}

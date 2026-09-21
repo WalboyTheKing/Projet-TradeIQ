@@ -6,7 +6,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
-import { CryptoPaymentSession, PaymentStatus } from '../lib/payments/types';
+import { CryptoPaymentSession, PaymentStatus, SweepStatus, UnmatchedPaymentRecord } from '../lib/payments/types';
 import { SubscriptionPlan, BillingInterval, PRICING_PLANS, UserRole, FeatureId, hasFeatureAccess } from '../lib/payments/pricing';
 
 export interface UserSubscription {
@@ -43,6 +43,9 @@ export class DatabaseService {
   private localStorePath: string;
   private memoryStore: {
     payments: Record<string, CryptoPaymentSession>;
+    depositIndex: Record<string, string>; // depositAddress (lowercase) -> paymentId
+    txHashIndex: Record<string, string>; // txHash (lowercase) -> paymentId
+    unmatchedPayments: UnmatchedPaymentRecord[];
     subscriptions: Record<string, UserSubscription>;
     paymentEvents: Record<string, PaymentEventRecord>;
     aiUsage: Record<string, { count: number; monthYear: string; lastUsed: string }>;
@@ -88,12 +91,29 @@ export class DatabaseService {
       }
       if (fs.existsSync(this.localStorePath)) {
         const raw = fs.readFileSync(this.localStorePath, 'utf8');
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        return {
+          payments: parsed.payments || {},
+          depositIndex: parsed.depositIndex || {},
+          txHashIndex: parsed.txHashIndex || {},
+          unmatchedPayments: parsed.unmatchedPayments || [],
+          subscriptions: parsed.subscriptions || {},
+          paymentEvents: parsed.paymentEvents || {},
+          aiUsage: parsed.aiUsage || {},
+        };
       }
     } catch (e) {
       console.warn('[TRADEIQ DB] Could not read local persistent store:', e);
     }
-    return { payments: {}, subscriptions: {}, paymentEvents: {}, aiUsage: {} };
+    return {
+      payments: {},
+      depositIndex: {},
+      txHashIndex: {},
+      unmatchedPayments: [],
+      subscriptions: {},
+      paymentEvents: {},
+      aiUsage: {},
+    };
   }
 
   private saveLocalStore() {
@@ -107,12 +127,22 @@ export class DatabaseService {
   }
 
   // ==========================================
-  // PAYMENTS MANAGEMENT
+  // PAYMENTS MANAGEMENT (DEDICATED MULTI-USER)
   // ==========================================
 
   async savePaymentSession(session: CryptoPaymentSession): Promise<void> {
-    // 1. Save locally
+    // 1. Save locally with multi-index lookup
     this.memoryStore.payments[session.id] = session;
+
+    const depositAddr = session.depositAddress || session.paymentAddress;
+    if (depositAddr) {
+      this.memoryStore.depositIndex[depositAddr.toLowerCase()] = session.id;
+    }
+
+    if (session.transactionHash) {
+      this.memoryStore.txHashIndex[session.transactionHash.toLowerCase()] = session.id;
+    }
+
     this.saveLocalStore();
 
     // 2. Save to Supabase if configured and valid user UUID
@@ -129,17 +159,25 @@ export class DatabaseService {
 
           const paymentRecord = {
             user_id: session.userId,
-            provider: 'nowpayments',
+            provider: 'hd_bsc',
             provider_payment_id: session.id,
             payment_method: 'crypto',
             plan: session.plan,
             amount_usdt: session.amountUsdt,
             token: session.token,
             network: session.network,
-            payment_address: session.paymentAddress,
+            payment_address: depositAddr,
             transaction_hash: session.transactionHash,
             status: session.status,
             metadata: {
+              depositAddress: depositAddr,
+              derivationIndex: session.derivationIndex,
+              confirmations: session.confirmations,
+              requiredConfirmations: session.requiredConfirmations,
+              sweepStatus: session.sweepStatus,
+              sweepTxHash: session.sweepTxHash,
+              merchantAddress: session.merchantAddress,
+              tokenContract: session.tokenContract,
               billingInterval: session.billingInterval,
               instructions: session.instructions,
               qrPayload: session.qrPayload,
@@ -164,32 +202,47 @@ export class DatabaseService {
   }
 
   async getPaymentSession(paymentId: string): Promise<CryptoPaymentSession | null> {
-    // Check Supabase first
+    // Check local store first (immediate memory latency)
+    if (this.memoryStore.payments[paymentId]) {
+      return this.memoryStore.payments[paymentId];
+    }
+
+    // Check Supabase
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase
           .from('payments')
           .select('*')
           .or(`id.eq.${paymentId},provider_payment_id.eq.${paymentId}`)
-          .single();
+          .maybeSingle();
 
         if (data && !error) {
+          const depositAddr = data.metadata?.depositAddress || data.payment_address;
           return {
-            id: data.id,
+            id: data.id || data.provider_payment_id,
             userId: data.user_id,
             plan: data.plan,
             billingInterval: data.metadata?.billingInterval || 'monthly',
             amountUsdt: Number(data.amount_usdt),
+            currency: 'USDT',
             token: data.token || 'USDT',
             network: data.network || 'BSC',
             networkName: 'BNB Smart Chain (BEP-20)',
-            paymentAddress: data.payment_address,
+            tokenContract: data.metadata?.tokenContract || '0x55d398326f99059fF775485246999027B3197955',
+            depositAddress: depositAddr,
+            paymentAddress: depositAddr,
             qrPayload: data.metadata?.qrPayload || '',
             status: data.status,
+            confirmations: data.metadata?.confirmations || 0,
+            requiredConfirmations: data.metadata?.requiredConfirmations || 15,
             expiresAt: data.expires_at,
             createdAt: data.created_at,
             transactionHash: data.transaction_hash,
             paidAt: data.paid_at,
+            derivationIndex: data.metadata?.derivationIndex,
+            merchantAddress: data.metadata?.merchantAddress,
+            sweepStatus: data.metadata?.sweepStatus || 'not_required',
+            sweepTxHash: data.metadata?.sweepTxHash || null,
             instructions: data.metadata?.instructions || {
               token: 'USDT (Tether USD)',
               network: 'BNB Smart Chain (BEP-20, Chain ID: 56)',
@@ -203,8 +256,160 @@ export class DatabaseService {
       }
     }
 
-    // Fallback to local store
-    return this.memoryStore.payments[paymentId] || null;
+    return null;
+  }
+
+  /**
+   * Deterministic lookup: Find payment by dedicated deposit address
+   */
+  async getPaymentByDepositAddress(depositAddress: string): Promise<CryptoPaymentSession | null> {
+    const normalized = depositAddress.toLowerCase();
+    const paymentId = this.memoryStore.depositIndex[normalized];
+    if (paymentId) {
+      return this.getPaymentSession(paymentId);
+    }
+
+    // Supabase query fallback
+    if (this.supabase) {
+      try {
+        const { data } = await this.supabase
+          .from('payments')
+          .select('provider_payment_id, id')
+          .ilike('payment_address', depositAddress)
+          .maybeSingle();
+
+        if (data) {
+          const id = data.provider_payment_id || data.id;
+          return this.getPaymentSession(id);
+        }
+      } catch (err: any) {
+        console.warn('[TRADEIQ DB] Error finding payment by deposit address:', err.message);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Anti-replay check: Check if transaction hash has already been used by any order
+   */
+  async getPaymentByTxHash(txHash: string): Promise<CryptoPaymentSession | null> {
+    const normalized = txHash.toLowerCase();
+    const paymentId = this.memoryStore.txHashIndex[normalized];
+    if (paymentId) {
+      return this.getPaymentSession(paymentId);
+    }
+
+    if (this.supabase) {
+      try {
+        const { data } = await this.supabase
+          .from('payments')
+          .select('provider_payment_id, id')
+          .ilike('transaction_hash', txHash)
+          .maybeSingle();
+
+        if (data) {
+          const id = data.provider_payment_id || data.id;
+          return this.getPaymentSession(id);
+        }
+      } catch (err: any) {
+        console.warn('[TRADEIQ DB] Error finding payment by txHash:', err.message);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Returns all payment sessions for the Admin settlement & audit view
+   */
+  async getAllPayments(): Promise<CryptoPaymentSession[]> {
+    const localList = Object.values(this.memoryStore.payments);
+
+    // If Supabase is available, sync and merge
+    if (this.supabase) {
+      try {
+        const { data } = await this.supabase
+          .from('payments')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (data && data.length > 0) {
+          const map = new Map<string, CryptoPaymentSession>();
+          for (const item of localList) {
+            map.set(item.id, item);
+          }
+          for (const row of data) {
+            const id = row.provider_payment_id || row.id;
+            if (!map.has(id)) {
+              const depositAddr = row.metadata?.depositAddress || row.payment_address;
+              map.set(id, {
+                id,
+                userId: row.user_id,
+                plan: row.plan,
+                billingInterval: row.metadata?.billingInterval || 'monthly',
+                amountUsdt: Number(row.amount_usdt),
+                currency: 'USDT',
+                token: row.token || 'USDT',
+                network: row.network || 'BSC',
+                networkName: 'BNB Smart Chain (BEP-20)',
+                tokenContract: row.metadata?.tokenContract || '0x55d398326f99059fF775485246999027B3197955',
+                depositAddress: depositAddr,
+                paymentAddress: depositAddr,
+                qrPayload: row.metadata?.qrPayload || '',
+                status: row.status,
+                confirmations: row.metadata?.confirmations || 0,
+                requiredConfirmations: row.metadata?.requiredConfirmations || 15,
+                expiresAt: row.expires_at,
+                createdAt: row.created_at,
+                transactionHash: row.transaction_hash,
+                paidAt: row.paid_at,
+                derivationIndex: row.metadata?.derivationIndex,
+                merchantAddress: row.metadata?.merchantAddress,
+                sweepStatus: row.metadata?.sweepStatus || 'not_required',
+                sweepTxHash: row.metadata?.sweepTxHash || null,
+                instructions: row.metadata?.instructions || {
+                  token: 'USDT (Tether USD)',
+                  network: 'BNB Smart Chain (BEP-20, Chain ID: 56)',
+                  confirmationsNeeded: 15,
+                  securityNote: 'Send ONLY USDT on BNB Smart Chain (BEP-20).',
+                },
+              });
+            }
+          }
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        }
+      } catch (err: any) {
+        console.warn('[TRADEIQ DB] Error fetching all payments from Supabase:', err.message);
+      }
+    }
+
+    return localList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  /**
+   * Records an unmatched / unassigned transaction (incoming transfer with no matching active order)
+   */
+  async recordUnmatchedPayment(
+    record: Omit<UnmatchedPaymentRecord, 'id' | 'detectedAt'>
+  ): Promise<UnmatchedPaymentRecord> {
+    const fullRecord: UnmatchedPaymentRecord = {
+      ...record,
+      id: `unmatched_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      detectedAt: new Date().toISOString(),
+    };
+
+    this.memoryStore.unmatchedPayments.unshift(fullRecord);
+    this.saveLocalStore();
+    console.warn(`⚠️ [TRADEIQ Payments] Recorded UNMATCHED payment ${fullRecord.id} on address ${record.destinationAddress} (${record.amountUsdt} USDT)`);
+    return fullRecord;
+  }
+
+  async getUnmatchedPayments(): Promise<UnmatchedPaymentRecord[]> {
+    return this.memoryStore.unmatchedPayments;
   }
 
   async updatePaymentStatus(
