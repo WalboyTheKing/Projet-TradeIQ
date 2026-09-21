@@ -194,20 +194,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
         <KpiCard
           label="Win Rate"
-          value={winRate.toFixed(1)}
+          value={totalTrades > 0 ? winRate.toFixed(1) : '0.0'}
           suffix="%"
-          variation={winRate >= 50 ? '+4.2%' : '-2.1%'}
-          variationType={winRate >= 50 ? 'positive' : 'negative'}
-          period="vs benchmark"
+          variation={totalTrades > 0 ? (winRate >= 50 ? '+4.2%' : '-2.1%') : '0.0%'}
+          variationType={totalTrades > 0 ? (winRate >= 50 ? 'positive' : 'negative') : 'neutral'}
+          period={totalTrades > 0 ? 'vs benchmark' : 'aucun trade'}
           sparklineData={sparklineEquity}
           subLabel="EDGE"
         />
 
         <KpiCard
           label="Net P&L"
-          value={netPnl >= 0 ? `+$${netPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `-$${Math.abs(netPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          variation={netPnl >= 0 ? '+12.4%' : '-4.5%'}
-          variationType={netPnl >= 0 ? 'positive' : 'negative'}
+          value={totalTrades > 0 ? (netPnl >= 0 ? `+$${netPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `-$${Math.abs(netPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) : '$0.00'}
+          variation={totalTrades > 0 ? (netPnl >= 0 ? '+12.4%' : '-4.5%') : '0.0%'}
+          variationType={totalTrades > 0 ? (netPnl >= 0 ? 'positive' : 'negative') : 'neutral'}
           period="net of fees"
           sparklineData={sparklineEquity}
           subLabel="EQUITY"
@@ -216,8 +216,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         <KpiCard
           label="Average Win"
           value={`$${avgWin.toFixed(2)}`}
-          variation="+1.8R"
-          variationType="positive"
+          variation={winningTrades > 0 ? '+1.8R' : '0.0R'}
+          variationType={winningTrades > 0 ? 'positive' : 'neutral'}
           period="per win"
           subLabel="PAYOUT"
         />
@@ -225,26 +225,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         <KpiCard
           label="Average Loss"
           value={`$${avgLoss.toFixed(2)}`}
-          variation="-1.0R"
-          variationType="negative"
+          variation={losingTrades > 0 ? '-1.0R' : '0.0R'}
+          variationType={losingTrades > 0 ? 'negative' : 'neutral'}
           period="per loss"
           subLabel="DRAWS"
         />
 
         <KpiCard
           label="Profit Factor"
-          value={profitFactor >= 100 ? '99.9+' : profitFactor.toFixed(2)}
-          variation={profitFactor >= 1.5 ? 'Institutional' : 'Developing'}
-          variationType={profitFactor >= 1.5 ? 'positive' : 'neutral'}
+          value={totalTrades > 0 ? (profitFactor >= 100 ? '99.9+' : profitFactor.toFixed(2)) : '0.00'}
+          variation={totalTrades > 0 ? (profitFactor >= 1.5 ? 'Institutional' : 'Developing') : 'No trades'}
+          variationType={totalTrades > 0 && profitFactor >= 1.5 ? 'positive' : 'neutral'}
           period="gross win / loss"
           subLabel="RATIO"
         />
 
         <KpiCard
           label="Average R:R"
-          value={`${avgR.toFixed(2)}R`}
-          variation="+0.4R"
-          variationType="positive"
+          value={`${totalTrades > 0 ? avgR.toFixed(2) : '0.00'}R`}
+          variation={totalTrades > 0 ? '+0.4R' : '0.0R'}
+          variationType={totalTrades > 0 ? 'positive' : 'neutral'}
           period="realized edge"
           subLabel="EXP"
         />
