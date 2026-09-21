@@ -76,6 +76,19 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile>(storageService.getUserProfile());
   const [isDemo, setIsDemo] = useState<boolean>(storageService.isDemoMode());
 
+  // Capture referral code from URL if present (e.g. ?ref=WL-TRADER)
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refCode = urlParams.get('ref');
+      if (refCode) {
+        localStorage.setItem('tradeiq_referral_code', refCode.trim());
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   // Listen to browser forward/backward navigation
   useEffect(() => {
     const handlePopState = () => {

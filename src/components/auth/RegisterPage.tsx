@@ -29,6 +29,16 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
+  const [referralCode] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem('tradeiq_referral_code');
+      if (stored) return stored;
+      const params = new URLSearchParams(window.location.search);
+      return params.get('ref') || null;
+    } catch {
+      return null;
+    }
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +133,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           <p className="text-xs text-slate-400 font-medium">
             Créer un compte de trading quantitatif
           </p>
+          {referralCode && (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-mono text-emerald-300">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Code parrain appliqué : <strong className="text-white">{referralCode}</strong></span>
+            </div>
+          )}
         </div>
 
         {/* Error banner */}
