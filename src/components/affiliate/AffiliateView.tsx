@@ -54,26 +54,26 @@ export const AffiliateView: React.FC<AffiliateViewProps> = ({ userProfile }) => 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
           <div className="text-[10px] text-slate-400 font-mono uppercase">Traders Référés</div>
-          <div className="text-2xl font-bold font-mono text-white mt-1">18</div>
-          <div className="text-[10px] text-slate-500 mt-1">12 inscrits actifs</div>
+          <div className="text-2xl font-bold font-mono text-white mt-1">0</div>
+          <div className="text-[10px] text-slate-500 mt-1">Aucun trader pour l'instant</div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
           <div className="text-[10px] text-slate-400 font-mono uppercase">Taux de Commission</div>
-          <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">35%</div>
-          <div className="text-[10px] text-slate-500 mt-1">Palier Silver Partenaire</div>
+          <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">30%</div>
+          <div className="text-[10px] text-slate-500 mt-1">Palier Standard Partenaire</div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
           <div className="text-[10px] text-slate-400 font-mono uppercase">Gains Totaux (USDT)</div>
-          <div className="text-2xl font-bold font-mono text-emerald-300 mt-1">184.50 USDT</div>
-          <div className="text-[10px] text-emerald-500 font-mono mt-1">Paiement automatique le 1er</div>
+          <div className="text-2xl font-bold font-mono text-emerald-300 mt-1">0.00 USDT</div>
+          <div className="text-[10px] text-slate-500 font-mono mt-1">Paiement dès 20 USDT</div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
           <div className="text-[10px] text-slate-400 font-mono uppercase">Clics sur le Lien</div>
-          <div className="text-2xl font-bold font-mono text-sky-400 mt-1">342</div>
-          <div className="text-[10px] text-slate-500 mt-1">Taux de conversion : 5.2%</div>
+          <div className="text-2xl font-bold font-mono text-sky-400 mt-1">0</div>
+          <div className="text-[10px] text-slate-500 mt-1">En attente de vos premiers partages</div>
         </div>
       </div>
 
