@@ -42,6 +42,7 @@ const ALL_CURRENCIES: CurrencyCode[] = [
   'AUD',
   'NZD',
   'CHF',
+  'CNY',
 ];
 
 const ALL_IMPACTS: ImpactLevel[] = ['high', 'medium', 'low'];
@@ -136,9 +137,10 @@ export const EconomicCalendarView: React.FC = () => {
       selectedImpacts,
       selectedCurrencies,
       searchQuery,
-      liveEvents
+      liveEvents,
+      selectedTimezone
     );
-  }, [currentMonday, selectedImpacts, selectedCurrencies, searchQuery, liveEvents]);
+  }, [currentMonday, selectedImpacts, selectedCurrencies, searchQuery, liveEvents, selectedTimezone]);
 
   const weekRangeLabel = useMemo(() => {
     return getWeekRangeLabel(currentMonday);
@@ -258,7 +260,7 @@ export const EconomicCalendarView: React.FC = () => {
       </div>
 
       {/* 2. Next High-Impact Event Banner */}
-      {nextHighImpact && (
+      {nextHighImpact ? (
         <div className="p-4 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/30 via-slate-900/60 to-slate-900/40 text-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-rose-950/10">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 border border-rose-500/30">
@@ -286,6 +288,25 @@ export const EconomicCalendarView: React.FC = () => {
           >
             Voir le Briefing →
           </button>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-300 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700/60">
+              <Info className="w-4 h-4 text-sky-400" />
+            </div>
+            <div>
+              <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                Prochain Événement à Fort Impact
+              </div>
+              <div className="text-xs sm:text-sm font-medium text-slate-300">
+                Aucun événement à fort impact programmé pour le reste de cette période.
+              </div>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400 border border-slate-800 px-2.5 py-1 rounded-md bg-slate-950/60 hidden sm:inline-block">
+            Statut: En veille
+          </span>
         </div>
       )}
 

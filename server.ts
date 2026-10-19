@@ -66,6 +66,7 @@ app.get('/api/economic-calendar', async (req: Request, res: Response) => {
   const now = Date.now();
 
   if (!forceFresh && cachedEconomicCalendar && (now - cachedEconomicCalendar.fetchedAt < CALENDAR_CACHE_DURATION_MS)) {
+    const ageSeconds = Math.floor((now - cachedEconomicCalendar.fetchedAt) / 1000);
     res.setHeader('Cache-Control', 'public, max-age=900');
     return res.json({
       success: true,
@@ -73,6 +74,7 @@ app.get('/api/economic-calendar', async (req: Request, res: Response) => {
       source: 'ForexFactory (Fair Economy Media)',
       updatedAt: cachedEconomicCalendar.updatedAt,
       cachedAt: new Date(cachedEconomicCalendar.fetchedAt).toISOString(),
+      cacheAgeSeconds: ageSeconds,
       events: cachedEconomicCalendar.events,
     });
   }
@@ -85,11 +87,14 @@ app.get('/api/economic-calendar', async (req: Request, res: Response) => {
     });
     if (!response.ok) {
       if (cachedEconomicCalendar) {
+        const ageSeconds = Math.floor((now - cachedEconomicCalendar.fetchedAt) / 1000);
         return res.json({
           success: true,
           status: 'CACHE',
           source: 'ForexFactory (Fair Economy Media)',
           updatedAt: cachedEconomicCalendar.updatedAt,
+          cachedAt: new Date(cachedEconomicCalendar.fetchedAt).toISOString(),
+          cacheAgeSeconds: ageSeconds,
           events: cachedEconomicCalendar.events,
           warning: 'Live feed returned non-200, serving cached data',
         });
