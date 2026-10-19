@@ -21,6 +21,7 @@ import {
   CurrencyCode,
   ImpactLevel,
   EconomicEvent,
+  CalendarTimezone,
 } from '../../types/economicCalendar';
 import {
   getMondayOfWeek,
@@ -28,6 +29,7 @@ import {
   getWeekRangeLabel,
   getNextHighImpactEvent,
   fetchLiveEconomicCalendar,
+  formatEventTimeInTimezone,
   CURRENCY_CONFIG,
 } from '../../lib/economicCalendarData';
 
@@ -45,34 +47,37 @@ const ALL_CURRENCIES: CurrencyCode[] = [
 const ALL_IMPACTS: ImpactLevel[] = ['high', 'medium', 'low'];
 
 export const EconomicCalendarView: React.FC = () => {
-  // Default to the requested week (September 7, 2026 is the Monday)
+  // Dynamically calculate the Monday of the current real week
   const initialMonday = useMemo(() => {
-    // September 7, 2026 is Monday
-    return new Date(2026, 8, 7); // month index 8 is September
+    return getMondayOfWeek(new Date());
   }, []);
 
   const [currentMonday, setCurrentMonday] = useState<Date>(initialMonday);
   const [selectedImpacts, setSelectedImpacts] = useState<ImpactLevel[]>([]);
   const [selectedCurrencies, setSelectedCurrencies] = useState<CurrencyCode[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedTimezone, setSelectedTimezone] = useState<'ET' | 'UTC' | 'CET'>('ET');
+  const [selectedTimezone, setSelectedTimezone] = useState<CalendarTimezone>('WAT');
   const [activeEventModal, setActiveEventModal] = useState<EconomicEvent | null>(null);
 
   // Live feed state
   const [liveEvents, setLiveEvents] = useState<EconomicEvent[]>([]);
   const [feedSource, setFeedSource] = useState<string>('ForexFactory (Fair Economy Media)');
+  const [feedStatus, setFeedStatus] = useState<'LIVE' | 'CACHE' | 'OFFLINE_BACKUP'>('LIVE');
   const [isLiveLoading, setIsLiveLoading] = useState<boolean>(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
 
-  const loadLiveFeed = async () => {
+  const loadLiveFeed = async (forceFresh = false) => {
     setIsLiveLoading(true);
     try {
       const data = await fetchLiveEconomicCalendar();
       setLiveEvents(data.events);
       setFeedSource(data.source);
-      setLastRefreshed(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      setFeedStatus(data.status);
+      const now = new Date();
+      setLastRefreshed(`${now.toLocaleDateString([], { month: 'short', day: 'numeric' })} à ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
     } catch (e) {
       console.warn('Failed to refresh calendar feed:', e);
+      setFeedStatus('OFFLINE_BACKUP');
     } finally {
       setIsLiveLoading(false);
     }
@@ -139,10 +144,10 @@ export const EconomicCalendarView: React.FC = () => {
     return getWeekRangeLabel(currentMonday);
   }, [currentMonday]);
 
-  // Next high-impact event
+  // Next high-impact event (computed dynamically from live events)
   const nextHighImpact = useMemo(() => {
-    return getNextHighImpactEvent(new Date(2026, 8, 8));
-  }, []);
+    return getNextHighImpactEvent(liveEvents, new Date());
+  }, [liveEvents]);
 
   const getImpactBadge = (impact: ImpactLevel) => {
     switch (impact) {
@@ -193,10 +198,22 @@ export const EconomicCalendarView: React.FC = () => {
         {/* Live Feed Status & Timezone Selector */}
         <div className="flex flex-wrap items-center gap-3 text-xs font-mono self-start md:self-auto">
           <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
+            {feedStatus === 'LIVE' ? (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                LIVE
+              </span>
+            ) : feedStatus === 'CACHE' ? (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-400 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                CACHE (15 min)
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                OFFLINE BACKUP
+              </span>
+            )}
             <span className="text-[11px] text-slate-400">
               Source: <strong className="text-slate-200">{feedSource}</strong>
             </span>
@@ -206,10 +223,10 @@ export const EconomicCalendarView: React.FC = () => {
               </span>
             )}
             <button
-              onClick={loadLiveFeed}
+              onClick={() => loadLiveFeed(true)}
               disabled={isLiveLoading}
-              title="Refresh live macro feed"
-              className="p-0.5 hover:text-emerald-400 transition-colors text-slate-400 disabled:opacity-50"
+              title="Rafraîchir le flux live"
+              className="p-0.5 hover:text-emerald-400 transition-colors text-slate-400 disabled:opacity-50 cursor-pointer"
             >
               <RotateCcw className={`w-3 h-3 ${isLiveLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -218,20 +235,21 @@ export const EconomicCalendarView: React.FC = () => {
           <div className="flex items-center gap-1.5">
             <span className="text-slate-400 flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              Timezone:
+              Fuseau :
             </span>
             <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
-              {(['ET', 'UTC', 'CET'] as const).map((tz) => (
+              {(['WAT', 'UTC', 'CET', 'ET'] as const).map((tz) => (
                 <button
                   key={tz}
                   onClick={() => setSelectedTimezone(tz)}
-                  className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                  title={tz === 'WAT' ? 'West Africa Time (Bénin / Porto-Novo, UTC+1)' : tz}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer ${
                     selectedTimezone === tz
                       ? 'bg-slate-800 text-emerald-400'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {tz}
+                  {tz === 'WAT' ? 'WAT (Bénin)' : tz}
                 </button>
               ))}
             </div>
@@ -240,39 +258,36 @@ export const EconomicCalendarView: React.FC = () => {
       </div>
 
       {/* 2. Next High-Impact Event Banner */}
-      <div className="p-4 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/30 via-slate-900/60 to-slate-900/40 text-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-rose-950/10">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 border border-rose-500/30">
-            <Flame className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono uppercase tracking-wider text-rose-400 font-bold">
-                Next High-Impact Event
-              </span>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
-              </span>
+      {nextHighImpact && (
+        <div className="p-4 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/30 via-slate-900/60 to-slate-900/40 text-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-rose-950/10">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 border border-rose-500/30">
+              <Flame className="w-5 h-5" />
             </div>
-            <div className="text-sm sm:text-base font-bold text-slate-100 font-mono mt-0.5">
-              ECB Press Conference (🇪🇺 EUR) — Thursday, September 10 at TBD {selectedTimezone}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono uppercase tracking-wider text-rose-400 font-bold">
+                  Prochain Événement à Fort Impact
+                </span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                </span>
+              </div>
+              <div className="text-sm sm:text-base font-bold text-slate-100 font-mono mt-0.5">
+                {nextHighImpact.event} ({nextHighImpact.flag} {nextHighImpact.currency}) — {nextHighImpact.date} à {formatEventTimeInTimezone(nextHighImpact, selectedTimezone)} ({selectedTimezone})
+              </div>
             </div>
           </div>
-        </div>
 
-        <button
-          onClick={() => {
-            const ecb = weekSchedule
-              .flatMap((d) => d.events)
-              .find((e) => e.id.includes('ecb'));
-            if (ecb) setActiveEventModal(ecb);
-          }}
-          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-mono font-medium transition-colors whitespace-nowrap self-start sm:self-auto"
-        >
-          View Briefing →
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveEventModal(nextHighImpact)}
+            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-mono font-medium transition-colors whitespace-nowrap self-start sm:self-auto cursor-pointer"
+          >
+            Voir le Briefing →
+          </button>
+        </div>
+      )}
 
       {/* 3. Filter Controls: Impacts + Currencies + Reset */}
       <div className="p-4 rounded-xl border border-slate-800 bg-[#0F172A]/70 space-y-3.5">
@@ -445,7 +460,7 @@ export const EconomicCalendarView: React.FC = () => {
                         >
                           {/* Time */}
                           <td className="py-3 px-4 text-slate-400 whitespace-nowrap">
-                            {evt.time}
+                            {formatEventTimeInTimezone(evt, selectedTimezone)}
                           </td>
 
                           {/* Currency */}
@@ -522,6 +537,9 @@ export const EconomicCalendarView: React.FC = () => {
                 <h3 className="text-base font-bold text-slate-100 font-mono mt-1">
                   {activeEventModal.event}
                 </h3>
+                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  📅 {activeEventModal.date} à {formatEventTimeInTimezone(activeEventModal, selectedTimezone)} ({selectedTimezone})
+                </div>
               </div>
               <button
                 onClick={() => setActiveEventModal(null)}

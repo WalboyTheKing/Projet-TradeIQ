@@ -23,18 +23,53 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ trades, userProfile })
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  // Filter trades based on report period
+  // Filter trades based on real calendar date boundaries
   const filteredTrades = useMemo(() => {
-    if (period === 'monthly') {
-      // Last 30 days
-      return trades.slice(0, 30);
+    const normalizeDateStr = (d?: string) => {
+      if (!d) return '';
+      return d.includes('T') ? d.split('T')[0] : d.trim();
+    };
+
+    if (period === 'custom') {
+      if (customStart && customEnd) {
+        return trades.filter((t) => {
+          const d = normalizeDateStr(t.date);
+          return d >= customStart && d <= customEnd;
+        });
+      }
+      return trades;
     }
+
+    const now = new Date();
+    // Anchor to latest trade date if latest trade is after now, else now
+    const sortedTrades = [...trades]
+      .filter((t) => t.date)
+      .sort((a, b) => normalizeDateStr(b.date).localeCompare(normalizeDateStr(a.date)));
+    const latestDate =
+      sortedTrades.length > 0 ? new Date(normalizeDateStr(sortedTrades[0].date) + 'T23:59:59') : now;
+    const refDate = latestDate > now ? latestDate : now;
+
     if (period === 'weekly') {
-      return trades.slice(0, 7);
+      const cutoff = new Date(refDate);
+      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      return trades.filter((t) => normalizeDateStr(t.date) >= cutoffStr);
     }
-    if (period === 'custom' && customStart && customEnd) {
-      return trades.filter((t) => t.date >= customStart && t.date <= customEnd);
+
+    if (period === 'monthly') {
+      const cutoff = new Date(refDate);
+      cutoff.setDate(cutoff.getDate() - 30);
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      return trades.filter((t) => normalizeDateStr(t.date) >= cutoffStr);
     }
+
+    if (period === 'yearly') {
+      const cutoff = new Date(refDate);
+      cutoff.setDate(cutoff.getDate() - 365);
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      return trades.filter((t) => normalizeDateStr(t.date) >= cutoffStr);
+    }
+
     return trades;
   }, [trades, period, customStart, customEnd]);
 

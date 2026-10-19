@@ -1,4 +1,4 @@
-import { EconomicEvent, DayEconomicSchedule, CurrencyCode, ImpactLevel } from '../types/economicCalendar';
+import { EconomicEvent, DayEconomicSchedule, CurrencyCode, ImpactLevel, CalendarTimezone } from '../types/economicCalendar';
 
 export const CURRENCY_CONFIG: Record<
   CurrencyCode,
@@ -441,6 +441,7 @@ export function parseForexFactoryItem(item: any, index: number): EconomicEvent |
     return {
       id: `ff-live-${index}-${datePart}-${item.title.replace(/\s+/g, '-').toLowerCase()}`,
       date: datePart,
+      rawDate,
       time: timePart,
       currency,
       countryName: config.country,
@@ -449,7 +450,7 @@ export function parseForexFactoryItem(item: any, index: number): EconomicEvent |
       impact,
       forecast: item.forecast && item.forecast.trim() !== '' ? item.forecast : '—',
       previous: item.previous && item.previous.trim() !== '' ? item.previous : '—',
-      actual: '—',
+      actual: item.actual && item.actual.trim() !== '' ? item.actual : '—',
       category:
         item.title.toLowerCase().includes('cpi') || item.title.toLowerCase().includes('inflation')
           ? 'inflation'
@@ -459,7 +460,7 @@ export function parseForexFactoryItem(item: any, index: number): EconomicEvent |
           ? 'employment'
           : 'growth',
       affectedPairs: affectedPairsMap[currency],
-      description: `Live market-moving macroeconomic release sourced from official institutional calendar feeds.`,
+      description: `Événement macroéconomique officiel issu du flux institutionnel ForexFactory (Fair Economy Media).`,
     };
   } catch {
     return null;
@@ -467,13 +468,51 @@ export function parseForexFactoryItem(item: any, index: number): EconomicEvent |
 }
 
 /**
- * Fetches the real-time live economic calendar feed from ForexFactory
+ * Formats event time into the user's selected timezone, including Africa/Porto-Novo (WAT, UTC+1 Bénin)
  */
-export async function fetchLiveEconomicCalendar(): Promise<{
+export function formatEventTimeInTimezone(
+  event: EconomicEvent,
+  timezone: CalendarTimezone
+): string {
+  if (!event.rawDate || !event.rawDate.includes('T')) {
+    return event.time || 'All Day';
+  }
+
+  try {
+    const d = new Date(event.rawDate);
+    if (isNaN(d.getTime())) return event.time || 'All Day';
+
+    const tzMapping: Record<CalendarTimezone, string> = {
+      ET: 'America/New_York',
+      UTC: 'UTC',
+      CET: 'Europe/Paris',
+      WAT: 'Africa/Porto-Novo',
+    };
+
+    const targetTz = tzMapping[timezone] || 'UTC';
+    return d.toLocaleTimeString('en-US', {
+      timeZone: targetTz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return event.time || 'All Day';
+  }
+}
+
+export interface LiveCalendarResult {
   source: string;
+  status: 'LIVE' | 'CACHE' | 'OFFLINE_BACKUP';
+  isFallback: boolean;
   events: EconomicEvent[];
   updatedAt: string;
-}> {
+}
+
+/**
+ * Fetches the real-time live economic calendar feed from ForexFactory
+ */
+export async function fetchLiveEconomicCalendar(): Promise<LiveCalendarResult> {
   // 1. Try local server proxy first
   try {
     const res = await fetch('/api/economic-calendar');
@@ -486,7 +525,9 @@ export async function fetchLiveEconomicCalendar(): Promise<{
 
         if (parsed.length > 0) {
           return {
-            source: 'ForexFactory (Fair Economy Media)',
+            source: data.source || 'ForexFactory (Fair Economy Media)',
+            status: data.status === 'CACHE' ? 'CACHE' : 'LIVE',
+            isFallback: false,
             events: parsed,
             updatedAt: data.updatedAt || new Date().toISOString(),
           };
@@ -494,7 +535,7 @@ export async function fetchLiveEconomicCalendar(): Promise<{
       }
     }
   } catch (err) {
-    console.warn('Local proxy calendar fetch failed, trying direct or cache:', err);
+    console.warn('Local proxy calendar fetch failed, trying direct fallback:', err);
   }
 
   // 2. Direct fetch fallback (if client network permits)
@@ -509,7 +550,9 @@ export async function fetchLiveEconomicCalendar(): Promise<{
 
         if (parsed.length > 0) {
           return {
-            source: 'ForexFactory (Fair Economy Media)',
+            source: 'ForexFactory (Direct Fair Economy Media)',
+            status: 'LIVE',
+            isFallback: false,
             events: parsed,
             updatedAt: new Date().toISOString(),
           };
@@ -520,16 +563,18 @@ export async function fetchLiveEconomicCalendar(): Promise<{
     console.warn('Direct ForexFactory fetch error:', err);
   }
 
-  // 3. Fallback to high-precision MASTER_ECONOMIC_EVENTS
+  // 3. Fallback to reference master events with explicit offline indicator
   return {
-    source: 'TradeIQ Macro Engine (Verified Historical & Forecast Data)',
+    source: 'TradeIQ Macro Engine (Données indicatives hors-ligne)',
+    status: 'OFFLINE_BACKUP',
+    isFallback: true,
     events: MASTER_ECONOMIC_EVENTS,
     updatedAt: new Date().toISOString(),
   };
 }
 
 /**
- * Returns the week label e.g. "Sep 7 — Sep 13, 2026"
+ * Returns the week label e.g. "Oct 19 — Oct 25, 2026"
  */
 export function getWeekRangeLabel(monday: Date): string {
   const sunday = new Date(monday);
@@ -542,31 +587,29 @@ export function getWeekRangeLabel(monday: Date): string {
   const d2 = sunday.getDate();
   const y = sunday.getFullYear();
 
-  if (m1 === m2) {
-    return `${m1} ${d1} — ${m2} ${d2}, ${y}`;
-  }
   return `${m1} ${d1} — ${m2} ${d2}, ${y}`;
 }
 
 /**
- * Finds the next high-impact event from current date or provided reference date
+ * Finds the next high-impact event from current date or provided reference date using live events
  */
-export function getNextHighImpactEvent(referenceDate: Date = new Date()): EconomicEvent | null {
+export function getNextHighImpactEvent(
+  events?: EconomicEvent[],
+  referenceDate: Date = new Date()
+): EconomicEvent | null {
+  const pool = events && events.length > 0 ? events : MASTER_ECONOMIC_EVENTS;
   const refKey = formatDateKey(referenceDate);
 
   // Filter high impact events on or after referenceDate
-  const upcoming = MASTER_ECONOMIC_EVENTS.filter(
-    (e) => e.impact === 'high' && e.date >= refKey
-  ).sort((a, b) => a.date.localeCompare(b.date));
+  const upcoming = pool
+    .filter((e) => e.impact === 'high' && e.date >= refKey)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   if (upcoming.length > 0) {
     return upcoming[0];
   }
 
-  // If none strictly after, return the prominent default ECB/CPI event
-  return (
-    MASTER_ECONOMIC_EVENTS.find((e) => e.id === 'evt-2026-09-10-ecb') ||
-    MASTER_ECONOMIC_EVENTS[0] ||
-    null
-  );
+  // If none strictly after today, return the earliest high-impact event of the pool
+  const anyHigh = pool.find((e) => e.impact === 'high');
+  return anyHigh || pool[0] || null;
 }

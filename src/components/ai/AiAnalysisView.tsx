@@ -18,27 +18,61 @@ interface AiAnalysisViewProps {
   userProfile: UserProfile;
 }
 
+export interface WeeklyAiReport {
+  summary: string;
+  whatWentWell?: string[];
+  strengths?: string[];
+  whatWentWrong?: string[];
+  weaknesses?: string[];
+  recurringPatterns?: string[];
+  areasToReview?: string[];
+  recommendations?: string[];
+  stats?: {
+    totalTrades: number;
+    winRate: string | number;
+    netPnl: number;
+  };
+  disclaimer?: string;
+  error?: string;
+}
+
 export const AiAnalysisView: React.FC<AiAnalysisViewProps> = ({ trades, userProfile }) => {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [weeklyReport, setWeeklyReport] = useState<any>(null);
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyAiReport | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [customPromptResult, setCustomPromptResult] = useState<string | null>(null);
 
   // Generate or trigger Weekly Review
   const handleGenerateWeeklyReview = async () => {
     setIsGenerating(true);
+    setReportError(null);
     try {
       const res = await fetch('/api/ai/weekly-review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userProfile?.id || 'usr_default',
+          'x-user-email': userProfile?.email || '',
+        },
         body: JSON.stringify({
-          trades: trades.slice(0, 30),
-          userProfile,
+          trades: trades.slice(0, 50),
+          userId: userProfile?.id || 'usr_default',
+          userEmail: userProfile?.email,
+          periodName: 'Derniers 30 jours',
         }),
       });
+
       const data = await res.json();
-      setWeeklyReport(data.report);
-    } catch (err) {
-      console.error(err);
+      if (!res.ok) {
+        throw new Error(data.error || 'Échec de la génération de la synthèse IA');
+      }
+
+      // Handle both direct response format and potential data.report wrapper
+      const resolvedReport: WeeklyAiReport = data.report || data;
+      setWeeklyReport(resolvedReport);
+    } catch (err: any) {
+      console.error('[AI Weekly Review Error]', err);
+      setReportError(err?.message || 'Erreur réseau lors de la communication avec le moteur IA');
     } finally {
       setIsGenerating(false);
     }
@@ -134,10 +168,49 @@ export const AiAnalysisView: React.FC<AiAnalysisViewProps> = ({ trades, userProf
           <span>Weekly Performance Synthesis</span>
         </h2>
 
-        {weeklyReport ? (
+        {reportError && (
+          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{reportError}</span>
+            </div>
+            <button
+              onClick={() => setReportError(null)}
+              className="text-xs text-rose-400 hover:text-rose-200 font-semibold cursor-pointer"
+            >
+              Fermer
+            </button>
+          </div>
+        )}
+
+        {isGenerating ? (
+          <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+            <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+            <div className="text-sm font-semibold text-slate-200">Synthèse IA en cours de génération...</div>
+            <p className="text-xs text-slate-400 max-w-md">
+              Audit approfondi de vos entrées, sorties, ratios R:R et régularité de vos sessions en cours.
+            </p>
+          </div>
+        ) : weeklyReport ? (
           <div className="space-y-4">
+            {/* Header / Stats row if present */}
+            {weeklyReport.stats && (
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono">
+                <span className="text-slate-400">Périmètre audité :</span>
+                <span className="text-slate-200 font-bold">{weeklyReport.stats.totalTrades} trades</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-400">Win Rate :</span>
+                <span className="text-slate-200 font-bold">{weeklyReport.stats.winRate}%</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-400">P&L Net :</span>
+                <span className={`font-bold ${weeklyReport.stats.netPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  ${weeklyReport.stats.netPnl.toFixed(2)}
+                </span>
+              </div>
+            )}
+
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 leading-relaxed">
-              <strong className="text-slate-100 block text-sm mb-1 font-mono">Executive Summary:</strong>
+              <strong className="text-slate-100 block text-sm mb-1 font-mono">Synthèse Exécutive :</strong>
               {weeklyReport.summary}
             </div>
 
@@ -145,10 +218,10 @@ export const AiAnalysisView: React.FC<AiAnalysisViewProps> = ({ trades, userProf
               {/* Strengths */}
               <div className="p-4 rounded-xl bg-emerald-950/10 border border-emerald-500/20 space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 font-mono">
-                  Execution Strengths
+                  Points Forts d'Exécution
                 </h3>
                 <ul className="text-xs text-slate-300 space-y-1.5">
-                  {(weeklyReport.strengths || []).map((s: string, idx: number) => (
+                  {(weeklyReport.whatWentWell || weeklyReport.strengths || []).map((s: string, idx: number) => (
                     <li key={idx} className="flex items-start gap-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                       <span>{s}</span>
@@ -160,10 +233,10 @@ export const AiAnalysisView: React.FC<AiAnalysisViewProps> = ({ trades, userProf
               {/* Weaknesses */}
               <div className="p-4 rounded-xl bg-rose-950/10 border border-rose-500/20 space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 font-mono">
-                  Identified Weaknesses
+                  Points de Vigilance & Biais
                 </h3>
                 <ul className="text-xs text-slate-300 space-y-1.5">
-                  {(weeklyReport.weaknesses || []).map((w: string, idx: number) => (
+                  {(weeklyReport.whatWentWrong || weeklyReport.weaknesses || []).map((w: string, idx: number) => (
                     <li key={idx} className="flex items-start gap-1.5">
                       <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
                       <span>{w}</span>
@@ -173,14 +246,31 @@ export const AiAnalysisView: React.FC<AiAnalysisViewProps> = ({ trades, userProf
               </div>
             </div>
 
+            {/* Recurring Patterns if returned */}
+            {((weeklyReport.recurringPatterns && weeklyReport.recurringPatterns.length > 0) ? (
+              <div className="p-4 rounded-xl bg-purple-950/10 border border-purple-500/20 space-y-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400 font-mono">
+                  Schémas Comportementaux Récurents
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5">
+                  {weeklyReport.recurringPatterns.map((pat: string, idx: number) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                      <span>{pat}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null)}
+
             {/* Recommendations */}
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-1.5">
                 <Lightbulb className="w-4 h-4 text-amber-400" />
-                <span>Actionable Weekly Directives</span>
+                <span>Directives Hebdomadaires Actionnables</span>
               </h3>
               <ul className="text-xs text-slate-300 space-y-1.5">
-                {(weeklyReport.recommendations || []).map((r: string, idx: number) => (
+                {(weeklyReport.areasToReview || weeklyReport.recommendations || []).map((r: string, idx: number) => (
                   <li key={idx} className="flex items-start gap-1.5">
                     <ArrowRight className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                     <span>{r}</span>
@@ -192,7 +282,7 @@ export const AiAnalysisView: React.FC<AiAnalysisViewProps> = ({ trades, userProf
         ) : (
           <div className="py-8 text-center text-xs text-slate-400 space-y-3">
             <Cpu className="w-8 h-8 mx-auto text-slate-400" />
-            <p>Click "Run Weekly AI Synthesis" above to generate a comprehensive institutional analysis of your recent trades.</p>
+            <p>Cliquez sur "Run Weekly AI Synthesis" ci-dessus pour générer une analyse institutionnelle complète de vos trades récents.</p>
           </div>
         )}
       </div>

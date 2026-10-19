@@ -281,6 +281,81 @@ class StorageService {
     localStorage.removeItem(STORAGE_KEYS.CHART_ANALYSES);
     window.dispatchEvent(new Event('tradeiq-chart-analyses-changed'));
   }
+
+  // Support Tickets Persistence
+  getSupportTickets(userId?: string): SupportTicketRecord[] {
+    try {
+      const data = localStorage.getItem('tradeiq_support_tickets');
+      if (!data) return [];
+      const list: SupportTicketRecord[] = JSON.parse(data);
+      if (userId) return list.filter((t) => !t.userId || t.userId === userId);
+      return list;
+    } catch {
+      return [];
+    }
+  }
+
+  saveSupportTicket(ticket: Omit<SupportTicketRecord, 'id' | 'createdAt' | 'status'>): SupportTicketRecord {
+    const existing = this.getSupportTickets();
+    const newRecord: SupportTicketRecord = {
+      ...ticket,
+      id: `TIQ-SUP-${Math.floor(1000 + Math.random() * 9000)}`,
+      status: 'Ouvert',
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newRecord, ...existing];
+    localStorage.setItem('tradeiq_support_tickets', JSON.stringify(updated));
+    window.dispatchEvent(new Event('tradeiq-support-changed'));
+    return newRecord;
+  }
+
+  // Creator Applications Persistence
+  getCreatorApplication(userId?: string): CreatorApplicationRecord | null {
+    try {
+      const data = localStorage.getItem('tradeiq_creator_application');
+      if (!data) return null;
+      const app: CreatorApplicationRecord = JSON.parse(data);
+      if (userId && app.userId && app.userId !== userId) return null;
+      return app;
+    } catch {
+      return null;
+    }
+  }
+
+  saveCreatorApplication(app: Omit<CreatorApplicationRecord, 'id' | 'submittedAt' | 'status'>): CreatorApplicationRecord {
+    const newRecord: CreatorApplicationRecord = {
+      ...app,
+      id: `TIQ-CREAT-${Math.floor(1000 + Math.random() * 9000)}`,
+      status: 'En revue institutionnelle',
+      submittedAt: new Date().toISOString(),
+    };
+    localStorage.setItem('tradeiq_creator_application', JSON.stringify(newRecord));
+    window.dispatchEvent(new Event('tradeiq-creator-changed'));
+    return newRecord;
+  }
+}
+
+export interface SupportTicketRecord {
+  id: string;
+  userId?: string;
+  category: 'technical' | 'billing' | 'account' | 'feature';
+  subject: string;
+  priority: 'normal' | 'urgent' | 'critical';
+  message: string;
+  contactEmail: string;
+  status: 'Ouvert' | 'En cours d\'examen' | 'Résolu';
+  createdAt: string;
+}
+
+export interface CreatorApplicationRecord {
+  id: string;
+  userId?: string;
+  handle: string;
+  specialty: string;
+  experienceYears: string;
+  pitch: string;
+  status: 'Candidature reçue' | 'En revue institutionnelle' | 'Approuvé';
+  submittedAt: string;
 }
 
 export const storage = new StorageService();

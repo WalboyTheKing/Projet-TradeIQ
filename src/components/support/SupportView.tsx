@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   HelpCircle,
   Mail,
@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { UserProfile } from '../../types/trade';
+import { storage, SupportTicketRecord } from '../../lib/storage';
 
 interface SupportViewProps {
   userProfile?: UserProfile | null;
@@ -74,21 +75,38 @@ export const SupportView: React.FC<SupportViewProps> = ({ userProfile }) => {
   const [contactEmail, setContactEmail] = useState(userProfile?.email || 'walioulabouda2@gmail.com');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [lastTicketId, setLastTicketId] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<SupportTicketRecord[]>(() => storage.getSupportTickets(userProfile?.id));
   const [openFaq, setOpenFaq] = useState<string | null>('faq-1');
   const [faqFilter, setFaqFilter] = useState<string>('all');
+
+  useEffect(() => {
+    const refresh = () => setTickets(storage.getSupportTickets(userProfile?.id));
+    window.addEventListener('tradeiq-support-changed', refresh);
+    return () => window.removeEventListener('tradeiq-support-changed', refresh);
+  }, [userProfile?.id]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ticketSubject.trim() || !ticketMessage.trim()) return;
 
     setIsSubmitting(true);
-    // Simulate real ticket submission
     setTimeout(() => {
+      const saved = storage.saveSupportTicket({
+        userId: userProfile?.id,
+        category: ticketCategory,
+        subject: ticketSubject.trim(),
+        priority: ticketPriority,
+        message: ticketMessage.trim(),
+        contactEmail: contactEmail.trim(),
+      });
+      setLastTicketId(saved.id);
+      setTickets(storage.getSupportTickets(userProfile?.id));
       setIsSubmitting(false);
       setSubmitSuccess(true);
       setTicketSubject('');
       setTicketMessage('');
-    }, 900);
+    }, 600);
   };
 
   const filteredFaqs = faqFilter === 'all' ? FAQS : FAQS.filter(f => f.category.toLowerCase() === faqFilter.toLowerCase());
@@ -209,12 +227,17 @@ export const SupportView: React.FC<SupportViewProps> = ({ userProfile }) => {
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-1">
                   <div className="font-bold text-sm">Ticket envoyé avec succès !</div>
+                  {lastTicketId && (
+                    <div className="font-mono text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/20 px-2 py-0.5 rounded inline-block">
+                      Référence : {lastTicketId}
+                    </div>
+                  )}
                   <p className="text-slate-300">
-                    Notre équipe d'ingénieurs a bien reçu votre demande. Un email de confirmation a été envoyé à <strong>{contactEmail}</strong>.
+                    Notre équipe d'ingénieurs a bien reçu votre demande. Un suivi a été consigné pour <strong>{contactEmail}</strong>.
                   </p>
                   <button
                     onClick={() => setSubmitSuccess(false)}
-                    className="mt-2 text-emerald-400 underline hover:text-emerald-300 text-[11px]"
+                    className="mt-2 text-emerald-400 underline hover:text-emerald-300 text-[11px] cursor-pointer"
                   >
                     Envoyer un autre message
                   </button>
@@ -319,6 +342,42 @@ export const SupportView: React.FC<SupportViewProps> = ({ userProfile }) => {
               </div>
             </form>
           </div>
+
+          {/* Historical Tickets List */}
+          {tickets.length > 0 && (
+            <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <h3 className="text-sm font-bold text-white">Vos Tickets Références ({tickets.length})</h3>
+                </div>
+                <span className="text-[11px] font-mono text-slate-400">Suivi actif</span>
+              </div>
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {tickets.map((t) => (
+                  <div
+                    key={t.id}
+                    className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex flex-col gap-1.5 text-xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-emerald-400 text-[11px]">{t.id}</span>
+                        <span className="text-slate-200 font-semibold truncate max-w-[200px]">{t.subject}</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        {t.status}
+                      </span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] line-clamp-2">{t.message}</p>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-800/40">
+                      <span>Catégorie : {t.category}</span>
+                      <span>{new Date(t.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* FAQ Section */}

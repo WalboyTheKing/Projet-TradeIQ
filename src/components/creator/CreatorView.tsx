@@ -11,13 +11,17 @@ import {
   Star
 } from 'lucide-react';
 import { UserProfile } from '../../types/trade';
+import { storage, CreatorApplicationRecord } from '../../lib/storage';
 
 interface CreatorViewProps {
   userProfile?: UserProfile | null;
 }
 
 export const CreatorView: React.FC<CreatorViewProps> = ({ userProfile }) => {
-  const [submitted, setSubmitted] = useState(false);
+  const [existingApp, setExistingApp] = useState<CreatorApplicationRecord | null>(() =>
+    storage.getCreatorApplication(userProfile?.id)
+  );
+  const [submitted, setSubmitted] = useState<boolean>(() => !!storage.getCreatorApplication(userProfile?.id));
   const [handle, setHandle] = useState('');
   const [specialty, setSpecialty] = useState('Forex & SMC');
   const [experienceYears, setExperienceYears] = useState('3-5 ans');
@@ -25,6 +29,16 @@ export const CreatorView: React.FC<CreatorViewProps> = ({ userProfile }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!handle.trim()) return;
+
+    const saved = storage.saveCreatorApplication({
+      userId: userProfile?.id,
+      handle: handle.trim(),
+      specialty,
+      experienceYears,
+      pitch: pitch.trim(),
+    });
+    setExistingApp(saved);
     setSubmitted(true);
   };
 
@@ -103,13 +117,54 @@ export const CreatorView: React.FC<CreatorViewProps> = ({ userProfile }) => {
           <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
             <h2 className="text-base font-bold text-white mb-4">Postuler au Programme Créateur</h2>
 
-            {submitted ? (
-              <div className="p-6 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 space-y-2 text-center">
-                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-                <div className="font-bold text-base">Candidature reçue avec succès !</div>
-                <p className="text-xs text-slate-300">
-                  Notre équipe de sélection examinera vos statistiques et vous répondra par email sous 48h.
+            {submitted && existingApp ? (
+              <div className="p-6 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-200 space-y-4 text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white text-base">Candidature enregistrée</div>
+                    <div className="text-[11px] font-mono text-purple-300">Réf : {existingApp.id}</div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 space-y-2 text-xs font-mono">
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Statut :</span>
+                    <span className="text-amber-400 font-bold px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30">
+                      {existingApp.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Créateur :</span>
+                    <span className="text-white font-semibold">{existingApp.handle}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Spécialité :</span>
+                    <span className="text-slate-300">{existingApp.specialty}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Expérience :</span>
+                    <span className="text-slate-300">{existingApp.experienceYears}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Déposée le :</span>
+                    <span className="text-slate-400">{new Date(existingApp.submittedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Notre équipe de sélection quantitative examine votre historique de trading et vous contactera sous 48h ouvrées.
                 </p>
+
+                <button
+                  type="button"
+                  onClick={() => setSubmitted(false)}
+                  className="w-full py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium cursor-pointer transition-colors"
+                >
+                  Mettre à jour ma candidature
+                </button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4 text-xs">

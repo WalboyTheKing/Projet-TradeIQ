@@ -56,8 +56,27 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// In-memory 15-minute cache for live economic calendar
+let cachedEconomicCalendar: { events: any[]; updatedAt: string; fetchedAt: number } | null = null;
+const CALENDAR_CACHE_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
 // Live Economic Calendar Proxy from ForexFactory (Fair Economy Media live feed)
 app.get('/api/economic-calendar', async (req: Request, res: Response) => {
+  const forceFresh = req.query.fresh === 'true';
+  const now = Date.now();
+
+  if (!forceFresh && cachedEconomicCalendar && (now - cachedEconomicCalendar.fetchedAt < CALENDAR_CACHE_DURATION_MS)) {
+    res.setHeader('Cache-Control', 'public, max-age=900');
+    return res.json({
+      success: true,
+      status: 'CACHE',
+      source: 'ForexFactory (Fair Economy Media)',
+      updatedAt: cachedEconomicCalendar.updatedAt,
+      cachedAt: new Date(cachedEconomicCalendar.fetchedAt).toISOString(),
+      events: cachedEconomicCalendar.events,
+    });
+  }
+
   try {
     const response = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
       headers: {
@@ -65,18 +84,45 @@ app.get('/api/economic-calendar', async (req: Request, res: Response) => {
       },
     });
     if (!response.ok) {
+      if (cachedEconomicCalendar) {
+        return res.json({
+          success: true,
+          status: 'CACHE',
+          source: 'ForexFactory (Fair Economy Media)',
+          updatedAt: cachedEconomicCalendar.updatedAt,
+          events: cachedEconomicCalendar.events,
+          warning: 'Live feed returned non-200, serving cached data',
+        });
+      }
       return res.status(502).json({ error: 'Failed to fetch live economic calendar feed' });
     }
     const data = await response.json();
-    res.setHeader('Cache-Control', 'public, max-age=900'); // 15 min cache
+    const isoNow = new Date().toISOString();
+    cachedEconomicCalendar = {
+      events: data,
+      updatedAt: isoNow,
+      fetchedAt: now,
+    };
+    res.setHeader('Cache-Control', 'public, max-age=900');
     res.json({
       success: true,
+      status: 'LIVE',
       source: 'ForexFactory (Fair Economy Media)',
-      updatedAt: new Date().toISOString(),
+      updatedAt: isoNow,
       events: data,
     });
   } catch (error: any) {
     console.error('Economic calendar proxy error:', error);
+    if (cachedEconomicCalendar) {
+      return res.json({
+        success: true,
+        status: 'CACHE',
+        source: 'ForexFactory (Fair Economy Media)',
+        updatedAt: cachedEconomicCalendar.updatedAt,
+        events: cachedEconomicCalendar.events,
+        warning: 'Network error, serving cached data',
+      });
+    }
     res.status(500).json({ error: 'Internal economic calendar error' });
   }
 });
@@ -689,8 +735,17 @@ Do NOT promise future returns. Never output markdown ticks. Return purely valid 
       if (response.text) {
         try {
           const parsed = JSON.parse(response.text.trim());
+          const whatWentWell = parsed.whatWentWell || parsed.strengths || [];
+          const whatWentWrong = parsed.whatWentWrong || parsed.weaknesses || [];
+          const areasToReview = parsed.areasToReview || parsed.recommendations || [];
           return res.json({
             ...parsed,
+            whatWentWell,
+            strengths: whatWentWell,
+            whatWentWrong,
+            weaknesses: whatWentWrong,
+            areasToReview,
+            recommendations: areasToReview,
             stats: { totalTrades: tradeList.length, winRate, netPnl: Number(totalPnl.toFixed(2)) },
             disclaimer,
           });
@@ -704,26 +759,36 @@ Do NOT promise future returns. Never output markdown ticks. Return purely valid 
   }
 
   // Analytical heuristic fallback for weekly review
+  const whatWentWell = [
+    `Maintained a ${winRate}% win rate across ${tradeList.length} recorded positions`,
+    'Consistent risk allocation per trade prevented catastrophic drawdowns',
+    'Disciplined stop loss placement protected capital on invalidations',
+  ];
+  const whatWentWrong = [
+    losses.length > 3 ? 'Multiple losses clustered in rapid succession during high volatility sessions' : 'Minor slippage recorded on breakout entries',
+    'Occasional early profit-taking prior to full technical targets',
+  ];
+  const recurringPatterns = [
+    'London and Overlap sessions generated higher average R-multiples than Asian session trades',
+    'Trend following setups demonstrated higher win rates than counter-trend mean reversion attempts',
+  ];
+  const areasToReview = [
+    'Refine rules for avoiding trades 15 minutes before high-impact economic releases',
+    'Audit position sizes on high-beta crypto assets to align with forex account risk',
+    'Review trade screenshots on losing trades to identify recurring entry mistakes',
+  ];
+
   return res.json({
-    summary: `During ${periodName || 'the evaluated period'}, ${tradeList.length} trades were logged resulting in a net P&L of $${totalPnl.toFixed(2)} with a ${winRate}% win rate.`,
-    whatWentWell: [
-      `Maintained a ${winRate}% win rate across ${tradeList.length} recorded positions`,
-      'Consistent risk allocation per trade prevented catastrophic drawdowns',
-      'Disciplined stop loss placement protected capital on invalidations',
-    ],
-    whatWentWrong: [
-      losses.length > 3 ? 'Multiple losses clustered in rapid succession during high volatility sessions' : 'Minor slippage recorded on breakout entries',
-      'Occasional early profit-taking prior to full technical targets',
-    ],
-    recurringPatterns: [
-      'London and Overlap sessions generated higher average R-multiples than Asian session trades',
-      'Trend following setups demonstrated higher win rates than counter-trend mean reversion attempts',
-    ],
-    areasToReview: [
-      'Refine rules for avoiding trades 15 minutes before high-impact economic releases',
-      'Audit position sizes on high-beta crypto assets to align with forex account risk',
-      'Review trade screenshots on losing trades to identify recurring entry mistakes',
-    ],
+    summary: tradeList.length === 0
+      ? 'Aucun trade enregistré dans votre journal pour la période sélectionnée. Ajoutez ou importez vos premiers trades pour générer un audit comportemental détaillé.'
+      : `During ${periodName || 'the evaluated period'}, ${tradeList.length} trades were logged resulting in a net P&L of $${totalPnl.toFixed(2)} with a ${winRate}% win rate.`,
+    whatWentWell: tradeList.length === 0 ? [] : whatWentWell,
+    strengths: tradeList.length === 0 ? [] : whatWentWell,
+    whatWentWrong: tradeList.length === 0 ? [] : whatWentWrong,
+    weaknesses: tradeList.length === 0 ? [] : whatWentWrong,
+    recurringPatterns: tradeList.length === 0 ? [] : recurringPatterns,
+    areasToReview: tradeList.length === 0 ? [] : areasToReview,
+    recommendations: tradeList.length === 0 ? [] : areasToReview,
     stats: { totalTrades: tradeList.length, winRate, netPnl: Number(totalPnl.toFixed(2)) },
     disclaimer,
   });

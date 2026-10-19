@@ -10,10 +10,13 @@ export type CurrencyCode =
   | 'NZD'
   | 'CHF';
 
+export type CalendarTimezone = 'ET' | 'UTC' | 'CET' | 'WAT';
+
 export interface EconomicEvent {
   id: string;
   date: string; // YYYY-MM-DD
-  time: string; // e.g. "08:30 AM", "All Day", "14:15"
+  rawDate?: string; // Original ISO timestamp from feed (e.g. 2026-10-18T10:15:00-04:00)
+  time: string; // Formatted time
   currency: CurrencyCode;
   countryName: string;
   flag: string;
