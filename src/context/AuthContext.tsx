@@ -293,6 +293,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ error?: string; needsEmailVerification?: boolean }> => {
     try {
       const emailRedirectTo = getAuthCallbackUrl();
+      const storedRefCode =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('tradeiq_referral_code') || undefined
+          : undefined;
 
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -301,6 +305,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           data: {
             name: name.trim(),
             full_name: name.trim(),
+            ...(storedRefCode ? { referred_by: storedRefCode } : {}),
           },
           emailRedirectTo,
         },
