@@ -191,12 +191,14 @@ app.get('/api/user/subscription', async (req: Request, res: Response) => {
 
     const account = await dbService.getUserAccount(userId, userEmail);
     const subscription = await dbService.getEffectiveSubscription(userId, userEmail);
+    const quotas = await dbService.getAiUsageOverview(userId, userEmail);
     return res.status(200).json({
       success: true,
       role: account.role,
       plan: account.plan,
       isAdmin: account.role === 'admin',
       subscription,
+      quotas,
     });
   } catch (err: any) {
     console.error('Error fetching subscription:', err);
@@ -234,7 +236,7 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
     const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
     const userEmail = req.body?.userEmail || (req.headers['x-user-email'] as string) || undefined;
 
-    // 1. Check & increment monthly AI quota from Supabase / DB
+    // 1. Check & increment daily and monthly AI quotas from persistent store / Supabase
     const { dbService } = await import('./src/server/db.js').catch(async () => {
       return await import('./src/server/db');
     });
@@ -246,6 +248,8 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
         plan: quota.plan,
         currentCount: quota.currentCount,
         limit: quota.limit,
+        dailyCount: quota.dailyCount,
+        dailyLimit: quota.dailyLimit,
       });
     }
 
@@ -263,6 +267,8 @@ app.post('/api/ai/chart-analysis', async (req: Request, res: Response) => {
       quotaUsage: {
         currentCount: quota.currentCount,
         limit: quota.limit,
+        dailyCount: quota.dailyCount,
+        dailyLimit: quota.dailyLimit,
         plan: quota.plan,
       },
     });
@@ -545,38 +551,41 @@ app.get('/api/tests/run', async (req: Request, res: Response) => {
   }
 });
 
-// AI Trade Review Endpoint (PRO / PREMIUM Feature, Admin Bypassed)
+// AI Trade Review Endpoint (Quota Enforced: Free 5/mo (2/day), Pro 50/mo (10/day), Premium 200/mo (30/day))
 app.post('/api/ai/trade-review', async (req: Request, res: Response) => {
   const { trade } = req.body;
   const userId = req.body?.userId || (req.headers['x-user-id'] as string) || 'usr_default';
+  const userEmail = req.body?.userEmail || (req.headers['x-user-email'] as string) || undefined;
 
   if (!trade) {
     return res.status(400).json({ error: 'Trade payload required' });
   }
 
+  let quotaUsage: any = null;
   // Check authorization & quotas
   try {
     const { dbService } = await import('./src/server/db.js').catch(async () => {
       return await import('./src/server/db');
     });
 
-    const hasAccess = await dbService.checkFeatureAccess(userId, 'ai-trade-review');
-    if (!hasAccess) {
-      return res.status(403).json({
-        error: 'AI Trade Review requires a PRO or PREMIUM plan. Please upgrade to unlock.',
-        requiredTier: 'pro',
-      });
-    }
-
-    const quota = await dbService.checkAndIncrementAiQuota(userId, 'trade_review');
+    const quota = await dbService.checkAndIncrementAiQuota(userId, 'trade_review', userEmail);
     if (!quota.allowed) {
       return res.status(403).json({
         error: quota.error,
         plan: quota.plan,
         currentCount: quota.currentCount,
         limit: quota.limit,
+        dailyCount: quota.dailyCount,
+        dailyLimit: quota.dailyLimit,
       });
     }
+    quotaUsage = {
+      currentCount: quota.currentCount,
+      limit: quota.limit,
+      dailyCount: quota.dailyCount,
+      dailyLimit: quota.dailyLimit,
+      plan: quota.plan,
+    };
   } catch (authErr: any) {
     console.warn('Authorization check warning in /api/ai/trade-review:', authErr.message);
   }
@@ -626,6 +635,7 @@ Do NOT promise future profit. Return purely JSON without markdown backticks.`;
           const parsed = JSON.parse(response.text.trim());
           return res.json({
             ...parsed,
+            quotaUsage,
             disclaimer,
           });
         } catch {
@@ -666,6 +676,7 @@ Do NOT promise future profit. Return purely JSON without markdown backticks.`;
       'Keep discipline score above 8 by avoiding impulsive pre-session executions',
     ],
     overallRating: isWin ? (isGoodR ? 'A' : 'B+') : (isLowDiscipline ? 'C' : 'B-'),
+    quotaUsage,
     disclaimer,
   });
 });

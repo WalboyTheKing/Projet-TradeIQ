@@ -18,6 +18,7 @@ export interface PlanDefinition {
   id: SubscriptionPlan;
   name: string;
   badge?: string;
+  subtitle?: string;
   description: string;
   pricing: {
     monthly: PlanPricing;
@@ -28,6 +29,8 @@ export interface PlanDefinition {
     chartAnalysesPerMonth: number;
     tradeReviewsPerMonth: number;
     weeklyReviewsPerMonth: number;
+    chartAnalysesPerDay: number;
+    tradeReviewsPerDay: number;
   };
   features: string[];
   highlighted?: boolean;
@@ -37,7 +40,9 @@ export const PRICING_PLANS: Record<SubscriptionPlan, PlanDefinition> = {
   free: {
     id: 'free',
     name: 'FREE',
-    description: 'Foundational journal, essential statistics, and starter AI testing.',
+    badge: 'Gratuit',
+    subtitle: 'Découverte et fidélisation',
+    description: 'Découverte et fidélisation — Permet de tester le produit sans rendre l\'offre payante inutile.',
     pricing: {
       monthly: { amountUsdt: 0 },
       yearly: { amountUsdt: 0 },
@@ -46,77 +51,78 @@ export const PRICING_PLANS: Record<SubscriptionPlan, PlanDefinition> = {
     aiLimits: {
       chartAnalysesPerMonth: 3,
       tradeReviewsPerMonth: 5,
+      chartAnalysesPerDay: 1,
+      tradeReviewsPerDay: 2,
       weeklyReviewsPerMonth: 1,
     },
     features: [
-      'Up to 50 active trade logs',
-      'Paper Trading Starter (10k demo balance, max 3 positions)',
-      'Core Performance Dashboard & KPI Cards',
-      'Trading Journal & Trade History',
-      'Economic Calendar & Market Sessions',
-      'Basic Trade & Risk Metrics',
-      'Basic Stress Testing',
-      '3 AI Chart Analyses / month',
-      'Standard Community Support',
+      '3 analyses de graphiques IA par mois (1 max / jour)',
+      '5 revues de trades IA par mois (2 max / jour)',
+      '50 trades actifs maximum',
+      'Paper Trading : capital virtuel de 10 000 $, 3 positions maximum',
+      'Dashboard, journal, historique et calendrier économique',
+      'Métriques de risque de base et stress test basique',
+      'Apprentissage et support communautaire',
     ],
   },
   pro: {
     id: 'pro',
     name: 'PRO',
-    badge: 'MOST POPULAR',
-    description: 'Advanced quantitative analytics, unlimited trades, and high-frequency AI reviews.',
+    badge: 'Offre principale',
+    subtitle: 'Utilisation régulière',
+    description: 'Utilisation régulière — Offre principale avec analytics quantitatifs avancés et cadence IA démultipliée.',
     pricing: {
       monthly: { amountUsdt: 5 },
-      yearly: { amountUsdt: 50, savingsPercentage: 17 }, // $50/yr (Save $10)
+      yearly: { amountUsdt: 50, savingsPercentage: 17 }, // $50/an (économisez 17%)
     },
     tradeLimit: Infinity,
     aiLimits: {
       chartAnalysesPerMonth: 30,
       tradeReviewsPerMonth: 50,
+      chartAnalysesPerDay: 5,
+      tradeReviewsPerDay: 10,
       weeklyReviewsPerMonth: 4,
     },
     features: [
-      'Everything in FREE',
-      'Unlimited trade logs & history',
-      '30 AI Chart Analyses / month',
-      'Multimodal BOS / CHOCH / S&D Annotations',
-      'AI Trade Review & Weekly Feedback',
-      'Advanced Risk & Drawdown Analytics',
-      'Monte Carlo Simulation & Advanced Stress Test',
-      'Paper Trading Pro (Capital 100 000 $, ordres illimités, multi-marchés)',
-      'Strategy Builder & Management',
-      'Universal CSV & Excel Import',
-      'Exchange & Account Connections',
-      'Priority Support',
+      'Tout ce qui est inclus dans FREE',
+      '30 analyses de graphiques IA par mois (5 max / jour)',
+      '50 revues de trades IA par mois (10 max / jour)',
+      'Trades et historique sans limite pratique',
+      'Analyse quantitative avancée et Monte Carlo',
+      'Strategy Builder et import CSV/Excel',
+      'Connexions de comptes, si techniquement prises en charge',
+      'Paper Trading avancé (Capital 100 000 $, ordres illimités)',
+      'Support prioritaire',
     ],
     highlighted: true,
   },
   premium: {
     id: 'premium',
     name: 'PREMIUM',
-    badge: 'ELITE TRADER',
-    description: 'Maximum AI computing throughput, deep behavioral discipline audit, and institutional tooling.',
+    badge: 'Elite Trader',
+    subtitle: 'Usage intensif',
+    description: 'Usage intensif — Conçu pour l\'Elite Trader avec cadence IA maximale et audit comportemental approfondi.',
     pricing: {
       monthly: { amountUsdt: 12 },
-      yearly: { amountUsdt: 120, savingsPercentage: 17 }, // $120/yr (Save $24)
+      yearly: { amountUsdt: 120, savingsPercentage: 17 }, // $120/an (économisez 17%)
     },
     tradeLimit: Infinity,
     aiLimits: {
       chartAnalysesPerMonth: 100,
       tradeReviewsPerMonth: 200,
+      chartAnalysesPerDay: 15,
+      tradeReviewsPerDay: 30,
       weeklyReviewsPerMonth: 12,
     },
     features: [
-      'Everything in PRO',
-      'Paper Trading PREMIUM • BETA ($250k Prop Challenge, Audit Pré-Ordre IA, Slippage simulé)',
-      '100 AI Chart Analyses / month',
-      'Highest Priority Multimodal Vision Processing',
-      'Deep Psychology & Discipline Audit',
-      'Multi-Timeframe Confluence Engine',
-      'Multi-Account Tracking & Portfolio Aggregation',
-      'Automated Trading Leak Detection',
-      'Future Beta Access to Institutional Tools',
-      'VIP Dedicated Support Channel',
+      'Tout ce qui est inclus dans PRO',
+      '100 analyses de graphiques IA par mois (15 max / jour)',
+      '200 revues de trades IA par mois (30 max / jour)',
+      'Audit comportemental et discipline',
+      'Confluence multi-timeframe',
+      'Agrégation multi-comptes',
+      'Paper Trading Premium et outils bêta ($250k challenge)',
+      'Priorité de traitement et support dédié',
     ],
   },
 };
@@ -178,7 +184,8 @@ export const FEATURE_ACCESS_MATRIX: Record<FeatureId, RequiredTier> = {
   'settings': 'free',
   'basic-trade-analysis': 'free',
   'basic-stress-test': 'free',
-  'chart-analysis': 'free', // Quota controlled: Free has 3/mo
+  'chart-analysis': 'free', // Quota controlled: Free has 3/mo (max 1/day)
+  'ai-trade-review': 'free', // Quota controlled: Free has 5/mo (max 2/day)
   'affiliate': 'free',
 
   // Pro tier features
@@ -191,7 +198,6 @@ export const FEATURE_ACCESS_MATRIX: Record<FeatureId, RequiredTier> = {
   'paper-trading': 'pro',
   'simulator': 'pro',
   'strategy-builder': 'pro',
-  'ai-trade-review': 'pro',
   'ai-weekly-review': 'pro',
   'creator': 'pro',
   'unlimited-trades': 'pro',
@@ -263,6 +269,8 @@ export function getEffectiveAccess(user: UserAccessContext | null | undefined) {
           chartAnalysesPerMonth: 999999,
           tradeReviewsPerMonth: 999999,
           weeklyReviewsPerMonth: 999999,
+          chartAnalysesPerDay: 999999,
+          tradeReviewsPerDay: 999999,
         }
       : PRICING_PLANS[plan].aiLimits,
     hasAccess: (feature: FeatureId) => hasFeatureAccess(user, feature),

@@ -47,6 +47,7 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'chart' | 'psychology' | 'ai'>('overview');
   const [loadingAi, setLoadingAi] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [showIndicators, setShowIndicators] = useState({ ema: true, vwap: true });
 
   const isWin = trade.result === 'WIN';
@@ -55,16 +56,27 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({
   // Request AI Review from server
   const handleRequestAiReview = async () => {
     setLoadingAi(true);
+    setAiError(null);
     try {
       const res = await fetch('/api/ai/trade-review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trade }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': trade.user_id || '',
+        },
+        body: JSON.stringify({
+          trade,
+          userId: trade.user_id,
+        }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Erreur serveur (${res.status})`);
+      }
       setAiAnalysis(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setAiError(e.message || 'Impossible d\'exécuter l\'audit IA pour ce trade.');
     } finally {
       setLoadingAi(false);
     }
@@ -449,6 +461,13 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({
           {/* TAB 4: AI RISK AUDIT */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
+              {aiError && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">{aiError}</div>
+                </div>
+              )}
+
               {!aiAnalysis ? (
                 <div className="p-8 text-center rounded-xl bg-slate-900/60 border border-slate-800">
                   <Sparkles className="w-8 h-8 text-purple-400 mx-auto mb-3" />
@@ -469,6 +488,14 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-4 text-xs">
+                  {aiAnalysis.quotaUsage && (
+                    <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                      <span>Consommation de revues IA :</span>
+                      <span className="font-mono text-purple-400 font-semibold">
+                        {aiAnalysis.quotaUsage.currentCount}/{aiAnalysis.quotaUsage.limit} ce mois • {aiAnalysis.quotaUsage.dailyCount}/{aiAnalysis.quotaUsage.dailyLimit} auj.
+                      </span>
+                    </div>
+                  )}
                   <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between">
                     <div>
                       <div className="font-bold text-purple-300 text-sm">Audit Summary</div>

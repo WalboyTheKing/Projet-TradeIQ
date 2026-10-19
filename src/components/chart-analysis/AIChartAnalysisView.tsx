@@ -26,6 +26,7 @@ import {
 import { UserProfile } from '../../types/trade';
 import { storageService } from '../../lib/storage';
 import { SAMPLE_CHART_ANALYSIS } from '../../lib/sampleChartAnalysis';
+import { PRICING_PLANS, SubscriptionPlan } from '../../lib/payments/pricing';
 
 interface AIChartAnalysisViewProps {
   userProfile?: UserProfile | null;
@@ -57,6 +58,14 @@ export const AIChartAnalysisView: React.FC<AIChartAnalysisViewProps> = ({ userPr
   const [analysisResult, setAnalysisResult] = useState<ChartAnalysisResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Quota usage overview
+  const [quotaInfo, setQuotaInfo] = useState<{
+    monthlyUsed: number;
+    monthlyLimit: number;
+    dailyUsed: number;
+    dailyLimit: number;
+  } | null>(null);
+
   // History State
   const [history, setHistory] = useState<SavedChartAnalysis[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
@@ -67,12 +76,28 @@ export const AIChartAnalysisView: React.FC<AIChartAnalysisViewProps> = ({ userPr
     setHistory(items);
   };
 
+  const fetchQuota = async () => {
+    if (!userProfile?.id) return;
+    try {
+      const res = await fetch(`/api/user/subscription?userId=${encodeURIComponent(userProfile.id)}`, {
+        headers: { 'x-user-id': userProfile.id },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.quotas?.chartAnalysis) {
+          setQuotaInfo(data.quotas.chartAnalysis);
+        }
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     reloadHistory();
+    fetchQuota();
     const handleStorage = () => reloadHistory();
     window.addEventListener('tradeiq-chart-analyses-changed', handleStorage);
     return () => window.removeEventListener('tradeiq-chart-analyses-changed', handleStorage);
-  }, []);
+  }, [userProfile?.id]);
 
   // Update profile params if user profile changes
   useEffect(() => {
@@ -231,9 +256,17 @@ export const AIChartAnalysisView: React.FC<AIChartAnalysisViewProps> = ({ userPr
         throw new Error(errJson?.error || `Server returned error (${res.status})`);
       }
 
-      const data: ChartAnalysisResult = await res.json();
+      const data: any = await res.json();
       setAnalysisResult(data);
       setSelectedHistoryId(data.id);
+      if (data.quotaUsage) {
+        setQuotaInfo({
+          monthlyUsed: data.quotaUsage.currentCount,
+          monthlyLimit: data.quotaUsage.limit,
+          dailyUsed: data.quotaUsage.dailyCount,
+          dailyLimit: data.quotaUsage.dailyLimit,
+        });
+      }
 
       // Save to client history
       const savedRecord: SavedChartAnalysis = {
@@ -310,38 +343,53 @@ export const AIChartAnalysisView: React.FC<AIChartAnalysisViewProps> = ({ userPr
           </p>
         </div>
 
-        {/* View mode toggle */}
-        <div className="flex items-center bg-[#0D131F] border border-slate-800 rounded-xl p-1 text-xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('analysis')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-              activeTab === 'analysis'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Analysis Workspace</span>
-          </button>
+        {/* Header Actions & Quota pill */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0D131F] border border-slate-800 text-xs">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-slate-400">Quota :</span>
+            <span className="font-semibold text-emerald-400 font-mono">
+              {userProfile?.role === 'admin'
+                ? 'Illimité (Admin)'
+                : quotaInfo
+                ? `${quotaInfo.monthlyUsed}/${quotaInfo.monthlyLimit} ce mois • ${quotaInfo.dailyUsed}/${quotaInfo.dailyLimit} auj.`
+                : `${PRICING_PLANS[(userProfile?.plan || 'free') as SubscriptionPlan]?.aiLimits.chartAnalysesPerMonth} / mois (max ${PRICING_PLANS[(userProfile?.plan || 'free') as SubscriptionPlan]?.aiLimits.chartAnalysesPerDay}/j)`}
+            </span>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-              activeTab === 'history'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>Saved Analyses</span>
-            {history.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-emerald-400 font-mono">
-                {history.length}
-              </span>
-            )}
-          </button>
+          {/* View mode toggle */}
+          <div className="flex items-center bg-[#0D131F] border border-slate-800 rounded-xl p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('analysis')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'analysis'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Analysis Workspace</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'history'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Saved Analyses</span>
+              {history.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-emerald-400 font-mono">
+                  {history.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -196,9 +196,11 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
           </div>
           <div className="h-9 w-px bg-slate-800" />
           <div>
-            <p className="text-xs text-slate-400">AI Chart Quota</p>
+            <p className="text-xs text-slate-400">AI Quotas (Mois / Jour)</p>
             <p className="text-sm font-semibold text-emerald-400 mt-0.5">
-              {userProfile.role === 'admin' ? 'Unlimited' : `${currentPlan.aiLimits.chartAnalysesPerMonth} / mo`}
+              {userProfile.role === 'admin'
+                ? 'Unlimited (Admin)'
+                : `${currentPlan.aiLimits.chartAnalysesPerMonth} graph. / mois (${currentPlan.aiLimits.chartAnalysesPerDay}/j max)`}
             </p>
           </div>
         </div>
@@ -259,7 +261,12 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
               <div>
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-white">{plan.name}</h3>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{plan.name}</h3>
+                    {plan.subtitle && (
+                      <p className="text-[11px] font-medium text-emerald-400/90">{plan.subtitle}</p>
+                    )}
+                  </div>
                   {isCurrent && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
                       Current Plan
@@ -283,26 +290,41 @@ export const BillingView: React.FC<BillingViewProps> = ({ userProfile, onUpdateP
                   </p>
                 </div>
 
-                {/* Quota Highlights */}
-                <div className="py-4 border-b border-slate-800/60 space-y-2 text-xs">
-                  <div className="flex items-center justify-between text-slate-300">
-                    <span className="flex items-center gap-1.5 text-slate-400">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                      AI Chart Analyses:
-                    </span>
-                    <span className="font-bold text-white">
-                      {plan.aiLimits.chartAnalysesPerMonth} / mo
-                    </span>
+                {/* Quota Highlights (Monthly Quotas + Daily Frequency Caps) */}
+                <div className="py-4 border-b border-slate-800/60 space-y-2.5 text-xs">
+                  <div>
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span className="flex items-center gap-1.5 text-slate-400">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        Analyses graphiques IA :
+                      </span>
+                      <span className="font-bold text-white">
+                        {plan.aiLimits.chartAnalysesPerMonth} / mois
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-end text-[11px] text-emerald-400/80 mt-0.5">
+                      <span>Plafond : {plan.aiLimits.chartAnalysesPerDay} max / jour</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-slate-300">
-                    <span className="flex items-center gap-1.5 text-slate-400">
-                      <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      AI Trade Reviews:
-                    </span>
-                    <span className="font-bold text-white">
-                      {plan.aiLimits.tradeReviewsPerMonth} / mo
-                    </span>
+
+                  <div>
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span className="flex items-center gap-1.5 text-slate-400">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        Revues de trades IA :
+                      </span>
+                      <span className="font-bold text-white">
+                        {plan.aiLimits.tradeReviewsPerMonth} / mois
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-end text-[11px] text-amber-400/80 mt-0.5">
+                      <span>Plafond : {plan.aiLimits.tradeReviewsPerDay} max / jour</span>
+                    </div>
                   </div>
+
+                  <p className="text-[10px] text-slate-500 italic pt-1">
+                    Les plafonds journaliers régulent la fréquence et ne constituent pas des quotas supplémentaires.
+                  </p>
                 </div>
 
                 {/* Features List */}

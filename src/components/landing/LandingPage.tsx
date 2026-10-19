@@ -260,11 +260,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
             {/* Free */}
             <div className="rounded-xl border border-slate-800 bg-[#0F172A]/70 p-6 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-slate-100">Free</h3>
-                <p className="text-xs text-slate-400 mt-1">For beginners exploring trading journals.</p>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-100">Free</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                    Gratuit
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Découverte et fidélisation</p>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-3xl font-extrabold font-mono text-slate-100">$0</span>
-                  <span className="text-xs text-slate-400">/month</span>
+                  <span className="text-xs text-slate-400">/mois</span>
                 </div>
                 <ul className="mt-6 space-y-2.5 text-xs text-slate-300">
                   {APP_CONFIG.plans.free.features.map((feat, idx) => (
@@ -279,23 +284,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
                 onClick={onStartFree}
                 className="mt-8 w-full py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition-colors"
               >
-                Get Started
+                Démarrer Gratuitement
               </button>
             </div>
 
             {/* Pro */}
             <div className="rounded-xl border-2 border-emerald-500/80 bg-[#0F172A] p-6 relative shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col justify-between">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-bold text-[10px] uppercase tracking-wider">
-                Most Popular
+                Offre principale
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-100">Pro</h3>
-                <p className="text-xs text-slate-400 mt-1">For active traders refining their edge.</p>
-                <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold font-mono text-emerald-400">$4</span>
-                  <span className="text-xs text-slate-400">/month ($40/yr)</span>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-100">Pro</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Populaire
+                  </span>
                 </div>
-                <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Payable with USDT (BSC)</p>
+                <p className="text-xs text-slate-400 mt-1">Utilisation régulière</p>
+                <div className="mt-4 flex items-baseline gap-1">
+                  <span className="text-3xl font-extrabold font-mono text-emerald-400">$5</span>
+                  <span className="text-xs text-slate-400">/mois ($50/an)</span>
+                </div>
+                <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Payable en USDT (BSC)</p>
                 <ul className="mt-6 space-y-2.5 text-xs text-slate-200">
                   {APP_CONFIG.plans.pro.features.map((feat, idx) => (
                     <li key={idx} className="flex items-center gap-2">
@@ -309,20 +319,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
                 onClick={onStartFree}
                 className="mt-8 w-full py-2.5 text-xs font-bold rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md transition-colors"
               >
-                Get Started with Pro
+                Passer en Pro
               </button>
             </div>
 
             {/* Premium */}
             <div className="rounded-xl border border-slate-800 bg-[#0F172A]/70 p-6 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-slate-100">Premium</h3>
-                <p className="text-xs text-slate-400 mt-1">For prop firm traders & professional desks.</p>
-                <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold font-mono text-slate-100">$9</span>
-                  <span className="text-xs text-slate-400">/month ($90/yr)</span>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-100">Premium</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Elite Trader
+                  </span>
                 </div>
-                <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Payable with USDT (BSC)</p>
+                <p className="text-xs text-slate-400 mt-1">Usage intensif</p>
+                <div className="mt-4 flex items-baseline gap-1">
+                  <span className="text-3xl font-extrabold font-mono text-slate-100">$12</span>
+                  <span className="text-xs text-slate-400">/mois ($120/an)</span>
+                </div>
+                <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Payable en USDT (BSC)</p>
                 <ul className="mt-6 space-y-2.5 text-xs text-slate-300">
                   {APP_CONFIG.plans.premium.features.map((feat, idx) => (
                     <li key={idx} className="flex items-center gap-2">
@@ -336,7 +351,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
                 onClick={onStartFree}
                 className="mt-8 w-full py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition-colors"
               >
-                Choose Premium
+                Choisir Premium
               </button>
             </div>
           </div>

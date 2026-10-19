@@ -747,17 +747,22 @@ export class DatabaseService {
   }
 
   // ==========================================
-  // SERVER-SIDE AI QUOTA CONTROL
+  // SERVER-SIDE AI QUOTA CONTROL (DAILY & MONTHLY)
   // ==========================================
 
   /**
-   * Validates and increments user's monthly AI usage against their active plan limit.
+   * Validates and increments user's daily and monthly AI usage against their active plan limits.
+   * Daily limits act as execution rate caps without granting extra monthly quota.
+   * Quotas are persistently saved on the server (.data/store.json & Supabase) and never reset
+   * on client disconnect, device change, or browser clock alteration.
    * Admins have UNLIMITED bypass access for testing all features without purchasing.
    */
   async checkAndIncrementAiQuota(userId: string, feature: 'chart_analysis' | 'trade_review', candidateEmail?: string): Promise<{
     allowed: boolean;
     currentCount: number;
     limit: number;
+    dailyCount: number;
+    dailyLimit: number;
     plan: SubscriptionPlan;
     role?: UserRole;
     unlimited?: boolean;
@@ -771,56 +776,102 @@ export class DatabaseService {
         allowed: true,
         currentCount: 0,
         limit: 999999,
+        dailyCount: 0,
+        dailyLimit: 999999,
         plan: account.plan,
         role: 'admin',
         unlimited: true,
       };
     }
 
-    const subInfo = await this.getEffectiveSubscription(userId);
+    const subInfo = await this.getEffectiveSubscription(userId, candidateEmail);
     const effectivePlan = subInfo.isActive ? subInfo.plan : account.plan;
     const planConfig = PRICING_PLANS[effectivePlan];
-    const limit = feature === 'chart_analysis'
+
+    const monthlyLimit = feature === 'chart_analysis'
       ? planConfig.aiLimits.chartAnalysesPerMonth
       : planConfig.aiLimits.tradeReviewsPerMonth;
 
-    const currentMonth = new Date().toISOString().substring(0, 7); // "YYYY-MM"
-    const usageKey = `${userId}:${feature}:${currentMonth}`;
+    const dailyLimit = feature === 'chart_analysis'
+      ? planConfig.aiLimits.chartAnalysesPerDay
+      : planConfig.aiLimits.tradeReviewsPerDay;
 
-    let usageCount = this.memoryStore.aiUsage[usageKey]?.count || 0;
+    const featureLabel = feature === 'chart_analysis' ? 'analyses graphiques IA' : 'revues de trades IA';
+
+    const now = new Date();
+    const currentMonth = now.toISOString().substring(0, 7); // "YYYY-MM"
+    const currentDay = now.toISOString().substring(0, 10); // "YYYY-MM-DD"
+    const monthlyKey = `${userId}:${feature}:${currentMonth}`;
+    const dailyKey = `${userId}:${feature}:day:${currentDay}`;
+
+    let monthlyCount = this.memoryStore.aiUsage[monthlyKey]?.count || 0;
+    let dailyCount = this.memoryStore.aiUsage[dailyKey]?.count || 0;
 
     // Check Supabase count if connected
     if (this.supabase) {
       try {
-        const { count } = await this.supabase
-          .from('ai_usage')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('feature', feature)
-          .gte('created_at', `${currentMonth}-01T00:00:00.000Z`);
+        const [monthRes, dayRes] = await Promise.all([
+          this.supabase
+            .from('ai_usage')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('feature', feature)
+            .gte('created_at', `${currentMonth}-01T00:00:00.000Z`),
+          this.supabase
+            .from('ai_usage')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('feature', feature)
+            .gte('created_at', `${currentDay}T00:00:00.000Z`),
+        ]);
 
-        if (typeof count === 'number') {
-          usageCount = count;
+        if (typeof monthRes.count === 'number') {
+          monthlyCount = Math.max(monthlyCount, monthRes.count);
+        }
+        if (typeof dayRes.count === 'number') {
+          dailyCount = Math.max(dailyCount, dayRes.count);
         }
       } catch (err) {}
     }
 
-    if (usageCount >= limit) {
+    // 1. Check Daily Limit First (Rate limit cap)
+    if (dailyCount >= dailyLimit) {
       return {
         allowed: false,
-        currentCount: usageCount,
-        limit,
+        currentCount: monthlyCount,
+        limit: monthlyLimit,
+        dailyCount,
+        dailyLimit,
         plan: effectivePlan,
         role: account.role,
-        error: `Monthly ${feature === 'chart_analysis' ? 'chart analysis' : 'AI review'} quota reached (${usageCount}/${limit}). Upgrade to ${effectivePlan === 'free' ? 'PRO or PREMIUM' : 'PREMIUM'} for higher limits.`,
+        error: `Limite quotidienne atteinte : ${dailyCount}/${dailyLimit} ${featureLabel} aujourd'hui pour le forfait ${effectivePlan.toUpperCase()}. Cette limite régule la cadence journalière. Revenez demain ou passez au forfait supérieur pour augmenter votre plafond.`,
       };
     }
 
-    // Increment
-    this.memoryStore.aiUsage[usageKey] = {
-      count: usageCount + 1,
+    // 2. Check Monthly Quota Second (Absolute monthly volume)
+    if (monthlyCount >= monthlyLimit) {
+      return {
+        allowed: false,
+        currentCount: monthlyCount,
+        limit: monthlyLimit,
+        dailyCount,
+        dailyLimit,
+        plan: effectivePlan,
+        role: account.role,
+        error: `Quota mensuel atteint : ${monthlyCount}/${monthlyLimit} ${featureLabel} consommées ce mois-ci pour le forfait ${effectivePlan.toUpperCase()}. Vos quotas se réinitialiseront au début du mois prochain, ou passez au forfait supérieur pour continuer immédiatement.`,
+      };
+    }
+
+    // Increment both daily and monthly counters
+    this.memoryStore.aiUsage[monthlyKey] = {
+      count: monthlyCount + 1,
       monthYear: currentMonth,
-      lastUsed: new Date().toISOString(),
+      lastUsed: now.toISOString(),
+    };
+    this.memoryStore.aiUsage[dailyKey] = {
+      count: dailyCount + 1,
+      monthYear: currentDay,
+      lastUsed: now.toISOString(),
     };
     this.saveLocalStore();
 
@@ -830,17 +881,56 @@ export class DatabaseService {
           user_id: userId,
           feature,
           model: process.env.AI_MODEL || 'gemini-2.5-flash',
-          created_at: new Date().toISOString(),
+          created_at: now.toISOString(),
         });
       } catch (e) {}
     }
 
     return {
       allowed: true,
-      currentCount: usageCount + 1,
-      limit,
+      currentCount: monthlyCount + 1,
+      limit: monthlyLimit,
+      dailyCount: dailyCount + 1,
+      dailyLimit,
       plan: effectivePlan,
       role: account.role,
+    };
+  }
+
+  /**
+   * Returns current AI consumption overview (both daily and monthly) for a user.
+   */
+  async getAiUsageOverview(userId: string, candidateEmail?: string) {
+    const account = await this.getUserAccount(userId, candidateEmail);
+    const subInfo = await this.getEffectiveSubscription(userId, candidateEmail);
+    const effectivePlan = subInfo.isActive ? subInfo.plan : account.plan;
+    const planConfig = PRICING_PLANS[effectivePlan];
+    const isAdmin = account.role === 'admin';
+
+    const now = new Date();
+    const currentMonth = now.toISOString().substring(0, 7);
+    const currentDay = now.toISOString().substring(0, 10);
+
+    const chartMonthKey = `${userId}:chart_analysis:${currentMonth}`;
+    const chartDayKey = `${userId}:chart_analysis:day:${currentDay}`;
+    const reviewMonthKey = `${userId}:trade_review:${currentMonth}`;
+    const reviewDayKey = `${userId}:trade_review:day:${currentDay}`;
+
+    return {
+      plan: effectivePlan,
+      isAdmin,
+      chartAnalysis: {
+        monthlyUsed: isAdmin ? 0 : (this.memoryStore.aiUsage[chartMonthKey]?.count || 0),
+        monthlyLimit: isAdmin ? 999999 : planConfig.aiLimits.chartAnalysesPerMonth,
+        dailyUsed: isAdmin ? 0 : (this.memoryStore.aiUsage[chartDayKey]?.count || 0),
+        dailyLimit: isAdmin ? 999999 : planConfig.aiLimits.chartAnalysesPerDay,
+      },
+      tradeReview: {
+        monthlyUsed: isAdmin ? 0 : (this.memoryStore.aiUsage[reviewMonthKey]?.count || 0),
+        monthlyLimit: isAdmin ? 999999 : planConfig.aiLimits.tradeReviewsPerMonth,
+        dailyUsed: isAdmin ? 0 : (this.memoryStore.aiUsage[reviewDayKey]?.count || 0),
+        dailyLimit: isAdmin ? 999999 : planConfig.aiLimits.tradeReviewsPerDay,
+      },
     };
   }
 }
