@@ -169,14 +169,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold tracking-tight text-slate-100 font-mono flex items-center gap-2">
               <CalendarIcon className="w-5 h-5 text-emerald-400" />
-              <span>Performance Calendar</span>
+              <span>Calendrier de Trading</span>
             </h1>
             {onNavigateEconomic && (
               <button
                 onClick={onNavigateEconomic}
                 className="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-emerald-400 border border-slate-700 transition-colors flex items-center gap-1"
               >
-                <span>Economic Calendar</span>
+                <span>Calendrier Économique</span>
                 <span>→</span>
               </button>
             )}
