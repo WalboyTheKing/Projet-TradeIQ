@@ -701,7 +701,11 @@ export default function App() {
             )}
 
             {currentTab === 'learning' && (
-              <LearningView />
+              <LearningView
+                trades={trades}
+                userProfile={activeProfile}
+                onNavigateBilling={() => setCurrentTab('billing')}
+              />
             )}
 
             {(currentTab === 'reports' || currentTab === 'trade-history') && (
