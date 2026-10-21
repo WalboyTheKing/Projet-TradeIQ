@@ -53,6 +53,7 @@ async function getExpressApp() {
 
   // Fallback 1: Dynamic ESM import of bundled or built server
   try {
+    // @ts-ignore - Build artifact generated during build
     const mod: any = await import('../dist/server.cjs')
       .catch(async () => import('../server.js'))
       .catch(async () => import('../server'));

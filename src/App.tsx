@@ -110,9 +110,9 @@ export default function App() {
     if (user) {
       storageService.setDemoMode(false);
       setIsDemo(false);
-      if (authRoute === 'callback' || authRoute === 'login' || authRoute === 'register') {
+      setShowLanding(false);
+      if (authRoute === 'callback' || authRoute === 'login' || authRoute === 'register' || authRoute === null) {
         navigateTo('/dashboard', null);
-        setShowLanding(false);
       }
     }
   }, [user, authRoute]);
@@ -346,7 +346,9 @@ export default function App() {
     setTrades([]);
     setStrategies([]);
     await signOut();
-    navigateTo('/login', 'login');
+    setShowLanding(true);
+    setAuthRoute(null);
+    navigateTo('/', null);
   };
 
   // 1. Global Loading State (Supabase session verification)
@@ -408,13 +410,18 @@ export default function App() {
   if (authRoute === 'register') {
     return (
       <RegisterPage
-        onNavigateLogin={() => navigateTo('/login', 'login')}
-        onSuccess={() => {
-          navigateTo('/dashboard', null);
+        onNavigateLogin={() => {
           setShowLanding(false);
+          navigateTo('/login', 'login');
+        }}
+        onSuccess={() => {
+          setShowLanding(false);
+          setAuthRoute(null);
+          navigateTo('/dashboard', null);
         }}
         onNavigateHome={() => {
           setShowLanding(true);
+          setAuthRoute(null);
           navigateTo('/', null);
         }}
       />
@@ -425,61 +432,59 @@ export default function App() {
   if (authRoute === 'login') {
     return (
       <LoginPage
-        onNavigateRegister={() => navigateTo('/register', 'register')}
-        onNavigateForgotPassword={() => navigateTo('/forgot-password', 'forgot-password')}
-        onSuccess={() => {
-          navigateTo('/dashboard', null);
+        onNavigateRegister={() => {
           setShowLanding(false);
+          navigateTo('/register', 'register');
+        }}
+        onNavigateForgotPassword={() => {
+          setShowLanding(false);
+          navigateTo('/forgot-password', 'forgot-password');
+        }}
+        onSuccess={() => {
+          setShowLanding(false);
+          setAuthRoute(null);
+          navigateTo('/dashboard', null);
         }}
         onNavigateHome={() => {
           setShowLanding(true);
-          navigateTo('/', null);
-        }}
-      />
-    );
-  }
-
-  // 7. Strict Authentication Check: Unauthenticated users can only access Landing Page or Auth Pages
-  if (!user && !isDemo) {
-    if (showLanding) {
-      return (
-        <LandingPage
-          onLogin={() => navigateTo('/login', 'login')}
-          onStartFree={() => navigateTo('/register', 'register')}
-          onExploreDemo={() => {
-            storageService.setDemoMode(true);
-            setIsDemo(true);
-            setShowLanding(false);
-            navigateTo('/dashboard', null);
-          }}
-        />
-      );
-    }
-
-    // Default to LoginPage for private application access (Dashboard, Journal, Settings, etc.)
-    return (
-      <LoginPage
-        onNavigateRegister={() => navigateTo('/register', 'register')}
-        onNavigateForgotPassword={() => navigateTo('/forgot-password', 'forgot-password')}
-        onSuccess={() => {
-          navigateTo('/dashboard', null);
-          setShowLanding(false);
-        }}
-        onNavigateHome={() => {
-          setShowLanding(true);
+          setAuthRoute(null);
           navigateTo('/', null);
         }}
         onExploreDemo={() => {
           storageService.setDemoMode(true);
           setIsDemo(true);
           setShowLanding(false);
+          setAuthRoute(null);
           navigateTo('/dashboard', null);
         }}
       />
     );
   }
 
-  // 8. If user explicitly requests to view the landing page
+  // 7. Strict Authentication Check: Unauthenticated visitors start on Landing Page (Index)
+  if (!user && !isDemo) {
+    return (
+      <LandingPage
+        onLogin={() => {
+          setShowLanding(false);
+          navigateTo('/login', 'login');
+        }}
+        onStartFree={() => {
+          setShowLanding(false);
+          navigateTo('/register', 'register');
+        }}
+        onExploreDemo={() => {
+          storageService.setDemoMode(true);
+          setIsDemo(true);
+          setShowLanding(false);
+          setAuthRoute(null);
+          navigateTo('/dashboard', null);
+        }}
+      />
+    );
+  }
+
+  // 8. If authenticated user explicitly requested to view the landing page
   if (showLanding) {
     return (
       <LandingPage
@@ -492,8 +497,6 @@ export default function App() {
           navigateTo('/dashboard', null);
         }}
         onExploreDemo={() => {
-          storageService.setDemoMode(true);
-          setIsDemo(true);
           setShowLanding(false);
           navigateTo('/dashboard', null);
         }}
@@ -543,7 +546,10 @@ export default function App() {
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
         onOpenUpgrade={() => setCurrentTab('billing')}
-        onNavigateHome={() => setShowLanding(true)}
+        onNavigateHome={() => {
+          setCurrentTab('dashboard');
+          setShowLanding(false);
+        }}
         onSignOut={handleSignOut}
       />
 
@@ -597,7 +603,10 @@ export default function App() {
           onOpenAddTrade={() => setIsAddTradeOpen(true)}
           onOpenImport={() => setCurrentTab('import')}
           onOpenUpgrade={() => setCurrentTab('billing')}
-          onShowLanding={() => setShowLanding(true)}
+          onShowLanding={() => {
+            setCurrentTab('dashboard');
+            setShowLanding(false);
+          }}
           onSignOut={handleSignOut}
         />
 
