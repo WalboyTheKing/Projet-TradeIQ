@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
 import { UserProfile } from '../../types/trade';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export type NavTab = 
   | 'dashboard'
@@ -327,7 +328,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {/* User profile row: WL / Waliou Labouda / walioulabouda2@gmail.com */}
+          {/* PWA Mobile & Tablet Install Prompt */}
+          <div className="pt-1">
+            <PWAInstallButton variant="sidebar" />
+          </div>
+
+          {/* User profile row */}
           <div className="flex items-center justify-between px-1 pt-1">
             <div className="flex items-center gap-2 truncate">
               <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 border border-emerald-400/30 flex items-center justify-center text-slate-950 font-bold text-xs shrink-0 shadow-sm font-mono">

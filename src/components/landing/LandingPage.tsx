@@ -17,6 +17,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 
 interface LandingPageProps {
   onStartFree: () => void;
@@ -104,6 +105,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
           </div>
 
           <div className="flex items-center gap-3">
+            <PWAInstallButton variant="header" />
             <button
               onClick={onLogin}
               className="px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
@@ -120,8 +122,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {/* Hero Section with Ambient Glow & Subtle Technical Grid */}
       <section className="relative pt-20 pb-16 lg:pt-28 lg:pb-24 overflow-hidden border-b border-slate-800/60">
+        {/* Ambient radial glow & technical grid */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-emerald-500/15 via-teal-500/5 to-transparent blur-3xl opacity-60" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b0a_1px,transparent_1px),linear-gradient(to_bottom,#1e293b0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+        </div>
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono text-emerald-400 mb-6">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -163,6 +171,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartFree, onLogin, 
                 <span>Explorer en Mode Démo</span>
               </button>
             )}
+
+            <PWAInstallButton variant="landing" />
           </div>
 
           <div className="mt-8 text-xs text-slate-400 font-mono">

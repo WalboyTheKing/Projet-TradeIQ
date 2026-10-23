@@ -11,6 +11,7 @@ import {
   Flame,
   LogOut
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 import { APP_CONFIG } from '../../config/appConfig';
 import { UserProfile } from '../../types/trade';
 
@@ -135,6 +136,8 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right actions */}
       <div className="flex items-center gap-2.5">
+        <PWAInstallButton variant="header" />
+
         {onOpenImport && (
           <button
             onClick={onOpenImport}

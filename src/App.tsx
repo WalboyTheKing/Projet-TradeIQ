@@ -35,6 +35,7 @@ import { StressTestView } from './components/stress-test/StressTestView';
 import { LearningView } from './components/learning/LearningView';
 import { CreatorView } from './components/creator/CreatorView';
 import { AffiliateView } from './components/affiliate/AffiliateView';
+import { OfflineIndicator } from './components/common/OfflineIndicator';
 
 // Auth Pages
 import { LoginPage } from './components/auth/LoginPage';
@@ -790,6 +791,9 @@ export default function App() {
         onSaveTrade={handleSaveTrade}
         strategies={strategies}
       />
+
+      {/* Network Connectivity & Offline Indicator */}
+      <OfflineIndicator />
     </div>
   );
 }
